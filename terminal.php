@@ -13,117 +13,118 @@
 
 /* Choose a random key Like ('Mmbuge8maD5VAUMc') for Security */
 const KEY = 'Mmbuge8maD5VAUMc';
-
-if ( KEY != '' && !isset($_GET['key']) && $_GET['key'] != KEY ) {
-    header('location: /');
+$isset = isset($_GET['key']);
+$key   = $_GET['key'] ?? null;
+if ( KEY != '' && !$isset && $key != KEY ) {
+	header('location: /');
 }
 
 if ( !function_exists('shell_exec') ) {
-    die('Sorry, this server has blocked shell access :(');
+	die('Sorry, this server has blocked shell access :(');
 }
 
 class CustomCommands {
 
-    /***************************************************************
-     *                 Add Your Custom Command Here                *
-     ***************************************************************
-     *    note 1: Function Name is Command and return is Result    *
-     *    note 2: $a is array of arguments                         *
-     * *************************************************************/
+	/***************************************************************
+	 *                 Add Your Custom Command Here                *
+	 ***************************************************************
+	 *    note 1: Function Name is Command and return is Result    *
+	 *    note 2: $a is array of arguments                         *
+	 * *************************************************************/
 
-    public static function hi ($a) {
-        return 'Hi ' . implode(' ', $a);
-    }
+	public static function hi ($a) {
+		return 'Hi ' . implode(' ', $a);
+	}
 
-    public static function md5 ($a) {
-        $input = implode(' ', $a);
-        if ( $input ) {
-            return md5($input);
-        } else {
-            return 'write something, example:<br>md5 test';
-        }
-    }
+	public static function md5 ($a) {
+		$input = implode(' ', $a);
+		if ( $input ) {
+			return md5($input);
+		} else {
+			return 'write something, example:<br>md5 test';
+		}
+	}
 
-    public static function developer () {
-        return 'SmartWF<br><a href="https://github.com/smartwf" target="_blank">github</a> &nbsp; &nbsp; <a href="mailto:hi@smartwf.ir" target="_blank">mail</a> &nbsp; &nbsp; <a href="http://twitter.com/smartwf" target="_blank">twitter</a>';
-    }
+	public static function developer () {
+		return 'SmartWF<br><a href="https://github.com/smartwf" target="_blank">github</a> &nbsp; &nbsp; <a href="mailto:hi@smartwf.ir" target="_blank">mail</a> &nbsp; &nbsp; <a href="http://twitter.com/smartwf" target="_blank">twitter</a>';
+	}
 }
 
 class Helper {
 
-    public static function removeSpecialChar ($string) {
-        if ( empty($string) ) {
-            return $string;
-        }
-        $str = '/[^A-Za-z0-9]/i';
+	public static function removeSpecialChar ($string) {
+		if ( empty($string) ) {
+			return $string;
+		}
+		$str = '/[^A-Za-z0-9]/i';
 
-        return preg_replace($str, '', $string); // Removes special chars.
-    }
+		return preg_replace($str, '', $string); // Removes special chars.
+	}
 
 
-    /**
-     * @param      $data
-     * @param bool $flag false for dont die after print_r
-     *
-     * @return void
-     */
-    public static function dd (...$data) {
-        echo '<div style="padding: 1rem;"><pre>';
+	/**
+	 * @param      $data
+	 * @param bool $flag false for dont die after print_r
+	 *
+	 * @return void
+	 */
+	public static function dd (...$data) {
+		echo '<div style="padding: 1rem;"><pre>';
 
-        foreach ( $data as $item ) {
-            echo "<div style='background: #121212;color: #9ad114;padding: 1% 2%;border-radius: 10px;' >";
-            print_r($item);
-            echo '</div>';
-            echo '<br>';
-        }
-        echo '</pre></div>';
+		foreach ( $data as $item ) {
+			echo "<div style='background: #121212;color: #9ad114;padding: 1% 2%;border-radius: 10px;' >";
+			print_r($item);
+			echo '</div>';
+			echo '<br>';
+		}
+		echo '</pre></div>';
 
-        die();
-    }
+		die();
+	}
 
-    /**
-     * @param      $data
-     * @param bool $flag false for dont die after print_r
-     *
-     * @return void
-     */
-    public static function dump (...$data) {
-        echo '<div style="padding: 1rem;"><pre>';
+	/**
+	 * @param      $data
+	 * @param bool $flag false for dont die after print_r
+	 *
+	 * @return void
+	 */
+	public static function dump (...$data) {
+		echo '<div style="padding: 1rem;"><pre>';
 
-        foreach ( $data as $item ) {
-            echo "<div style='background: #121212;color: #9ad114;padding: 1% 2%;border-radius: 10px;' >";
-            print_r($item);
-            echo '</div>';
-            echo '<br>';
-        }
-        echo '</pre></div>';
-    }
+		foreach ( $data as $item ) {
+			echo "<div style='background: #121212;color: #9ad114;padding: 1% 2%;border-radius: 10px;' >";
+			print_r($item);
+			echo '</div>';
+			echo '<br>';
+		}
+		echo '</pre></div>';
+	}
 
-    /**
-     * @param      $data
-     * @param bool $flag false for dont die after var_dump
-     *
-     * @return void
-     */
-    public static function vd ($data, bool $flag = true) {
-        echo '<div style="padding: 1rem;"><pre>';
-        echo "<div style='background: #121212;color: #9ad114;padding: 1% 2%;border-radius: 10px;' >";
-        var_dump($data);
-        echo '</div>';
-        echo '<br>';
-        echo '</pre></div>';
+	/**
+	 * @param      $data
+	 * @param bool $flag false for dont die after var_dump
+	 *
+	 * @return void
+	 */
+	public static function vd ($data, bool $flag = true) {
+		echo '<div style="padding: 1rem;"><pre>';
+		echo "<div style='background: #121212;color: #9ad114;padding: 1% 2%;border-radius: 10px;' >";
+		var_dump($data);
+		echo '</div>';
+		echo '<br>';
+		echo '</pre></div>';
 
-        if ( $flag ) {
-            die();
-        }
-    }
+		if ( $flag ) {
+			die();
+		}
+	}
 
 }
 
 class TerminalPHP {
 
-    /* These commands are not executed */
-    private $blocked_commands = [/*'mkdir',
+	/* These commands are not executed */
+	private $blocked_commands = [/*'mkdir',
         'rm',
         'git',
         'wget',
@@ -132,183 +133,206 @@ class TerminalPHP {
         'rename',
         'mv',
         'cp'*/
-    ];
+	];
 
-    /**
-     * initialize Class
-     *
-     * @param $path string default path to start
-     */
-    public function __construct ($path = '') {
-        $this->_cd($path);
-    }
+	/**
+	 * initialize Class
+	 *
+	 * @param $path string default path to start
+	 */
+	public function __construct ($path = '') {
+		$this->_cd($path);
+	}
 
-    /**
-     * Execute Shell Command
-     *
-     * @param $cmd string command
-     *
-     * @return string
-     */
-    private function shell ($cmd) {
-        return trim(shell_exec($cmd .' 2>&1 '));
-    }
+	/**
+	 * Execute Shell Command
+	 *
+	 * @param $cmd string command
+	 *
+	 * @return string
+	 */
+	private function shell ($cmd) {
+		$resp = shell_exec($cmd . ' 2>&1 ');
+		return $resp ? trim($resp) : $resp;
+	}
 
-    /**
-     * Check Command Exists
-     *
-     * @param $command string command to check
-     *
-     * @return bool
-     */
-    private function commandExists ($command) {
-        if ( $this->shell('command -v ' . $command) ) {
-            return true;
-        }
-        return false;
-    }
+	/**
+	 * Check Command Exists
+	 *
+	 * @param $command string command to check
+	 *
+	 * @return bool
+	 */
+	private function commandExists ($command) {
+		if ( $this->shell('command -v ' . $command) ) {
+			return true;
+		}
 
-    /**
-     * Run Commands as Class method
-     *
-     * @param $cmd string command
-     * @param $arg array arguments
-     *
-     * @return string
-     */
-    public function __call ($cmd, $arg) {
-        return $this->runCommand($cmd . (isset($arg[0]) ? ' ' . $arg[0] : ''));
-    }
+		return false;
+	}
 
-    /**
-     * Run Command in Terminal
-     *
-     * @param $command string command to run
-     *
-     * @return string
-     */
-    public function runCommand ($command) {
-        $args = explode(' ', $command);
-        $cmd = $args[0];
-        unset($args[0]);
-        $escapedArgs = array_map('escapeshellarg', $args);
-        $arg = count($args) > 0 ? implode(' ', $args) : '';
+	/**
+	 * Run Commands as Class method
+	 *
+	 * @param $cmd string command
+	 * @param $arg array arguments
+	 *
+	 * @return string
+	 */
+	public function __call ($cmd, $arg) {
+		return $this->runCommand($cmd . (isset($arg[0]) ? ' ' . $arg[0] : ''));
+	}
 
-        if ( array_search($cmd, $this->getLocalCommands()) !== false ) {
-            $lcmd = '_' . $cmd;
-            return $this->$lcmd($arg);
-        } else if ( array_search($cmd, $this->blocked_commands) !== false ) {
-            return 'terminal.php: Permission denied';
-        } else if ( $this->commandExists($cmd) ) {
-            $fullCmd = $cmd . ' ' . implode(' ', $escapedArgs);
-            return $this->shell($fullCmd);
-        } else {
-            return 'terminal.php: command not found: ' . $cmd;
-        }
-    }
+	/**
+	 * Run Command in Terminal
+	 *
+	 * @param $command string command to run
+	 *
+	 * @return string
+	 */
+	public function runCommand (string $command) {
 
-    /**
-     * Normalize text for show in html
-     *
-     * @param $input string input text
-     *
-     * @return string
-     */
-    public function normalizeHtml ($input) {
-        return str_replace(['<', '>', "\n", "\t", ' '], [
-            '&lt;',
-            '&gt;',
-            '<br>',
-            '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;',
-            '&nbsp;'
-        ], $input);
-    }
+		$args = explode(' ', $command);
+		$cmd  = $args[0];
+		unset($args[0]);
+		// For wildcard
+		$allowedForWildcard = ['ls', 'cat'];
 
-    /**
-     * Array of Local Commands
-     *
-     * @return array
-     */
-    private function getLocalCommands () {
-        $commands = array_filter(get_class_methods($this), function ($i) {
-            return ($i[0] == '_' && $i[1] != '_');
-        });
-        foreach ( $commands as $i => $command ) {
-            $commands[$i] = substr($command, 1);
-        }
+		$escapedArgs = array_map(function ($value) use ($cmd, $allowedForWildcard) {
+			if ( in_array($cmd, $allowedForWildcard) && preg_match('/^[\w\-\.\*\/]+$/', $value) ) {
+				return $value;
+			}
 
-        return $commands;
-    }
+			return escapeshellarg($value);
+		}, $args);
+		$arg         = count($args) > 0 ? implode(' ', $args) : '';
 
-    /**
-     * Array of All Commands
-     *
-     * @return array
-     */
-    public function commandsList () {
-        return array_merge(explode("\n", $this->ls('/usr/bin')), get_class_methods('CustomCommands'));
-    }
+		if ( array_search($cmd, $this->getLocalCommands()) !== false ) {
+			$lcmd = '_' . $cmd;
 
-    /************************************************************/
-    /*                      Local Commands                      */
-    /*                                                          */
-    /*             note: command must start with '_'            */
-    /************************************************************/
+			return $this->$lcmd($arg);
+		} else if ( array_search($cmd, $this->blocked_commands) !== false ) {
+			return 'terminal.php: Permission denied';
+		} else if ( $this->commandExists($cmd) ) {
+			$fullCmd = $cmd . ' ' . implode(' ', $escapedArgs);
 
-    /**
-     * Change Directory Command
-     *
-     * @param $path string patch to change
-     *
-     * @return void
-     */
-    private function _cd ($path) {
-        if ( $path ) {
-            chdir($path);
-        }
+			return $this->shell($fullCmd);
+		} else {
+			return 'terminal.php: command not found: ' . $cmd;
+		}
+	}
 
-    }
+	/**
+	 * Normalize text for show in html
+	 *
+	 * @param $input string input text
+	 *
+	 * @return string
+	 */
+	public function normalizeHtml ($input) {
+		if ( empty($input) ) {
+			return '';
+		}
 
-    /**
-     * Current Working Directory Command
-     *
-     * @return string
-     */
-    private function _pwd () {
-        return getcwd();
-    }
+		return str_replace(['<', '>', "\n", "\t", ' '], [
+			'&lt;',
+			'&gt;',
+			'<br>',
+			'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;',
+			'&nbsp;'
+		], $input);
+	}
 
-    /**
-     * Ping Command
-     *
-     * @return string
-     */
-    private function _ping ($a) {
-        if ( strpos($a, '-c ') !== false ) {
-            return $this->shell('ping ' . $a) ;
-        }
-        return $this->shell('ping -c 4 ' . $a) ;
-    }
+	/**
+	 * Array of Local Commands
+	 *
+	 * @return array
+	 */
+	private function getLocalCommands () {
+		$commands = array_filter(get_class_methods($this), function ($i) {
+			return ($i[0] == '_' && $i[1] != '_');
+		});
+		foreach ( $commands as $i => $command ) {
+			$commands[$i] = substr($command, 1);
+		}
+
+		return $commands;
+	}
+
+	/**
+	 * Array of All Commands
+	 *
+	 * @return array
+	 */
+	public function commandsList () {
+		return array_merge(explode("\n", $this->ls('/usr/bin')), get_class_methods('CustomCommands'));
+	}
+
+	/************************************************************/
+	/*                      Local Commands                      */
+	/*                                                          */
+	/*             note: command must start with '_'            */
+	/************************************************************/
+
+	/**
+	 * Change Directory Command
+	 *
+	 * @param $path string patch to change
+	 *
+	 * @return void
+	 */
+	private function _cd ($path) {
+		if ( $path ) {
+			chdir($path);
+		}
+
+	}
+
+	/**
+	 * Current Working Directory Command
+	 *
+	 * @return string
+	 */
+	private function _pwd () {
+		return getcwd();
+	}
+
+	/**
+	 * Ping Command
+	 *
+	 * @return string
+	 */
+	private function _ping ($a) {
+
+		if ( strpos($a, '-c ') !== false ) {
+			return $this->shell('ping ' . $a);
+		}
+
+		return $this->shell('ping -c 4 ' . $a);
+	}
 
 }
 
 
 /* Check if Request is Ajax */
 if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' && isset($_POST['command']) ) {
-    $command   = explode(' ', $_REQUEST['command'])[0];
-    $arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
-    $path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
-    $terminal = new TerminalPHP($path);
-    if ( in_array($command, get_class_methods('CustomCommands')) ) {
-        $resp = json_encode(['result' => CustomCommands::$command($arguments), 'path' => $terminal->pwd()]);
-    } else {
-        $resp = json_encode([
-            'result' => $terminal->normalizeHtml($terminal->runCommand($_REQUEST['command'])),
-            'path'   => $terminal->pwd()
-        ]);
-    }
+	$command   = explode(' ', $_REQUEST['command'])[0];
+	$arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
+	$path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
+	$terminal  = new TerminalPHP($path);
 
-    exit($resp);
+	if ( in_array($command, get_class_methods('CustomCommands')) ) {
+		$result = CustomCommands::$command($arguments);
+	} else {
+		$command = $terminal->runCommand($_REQUEST['command']);
+		$result  = $terminal->normalizeHtml($command);
+	}
+	$resp = json_encode([
+		'result' => $result,
+		'path'   => $terminal->pwd()
+	]);
+
+	exit($resp);
 }
 
 $terminal = new TerminalPHP();
@@ -585,7 +609,6 @@ $terminal = new TerminalPHP();
 
     </style>
 </head>
-
 <body>
 <terminal>
     <header>
@@ -678,14 +701,14 @@ $terminal = new TerminalPHP();
             reset();
         }
         /* Ctrl + V */
-        else if ((e.ctrlKey && keyCode === 86) ){
+        else if ((e.ctrlKey && keyCode === 86)) {
 
         }
         /* Enter */
         else if (keyCode === 13) {
             if (autocomplete_position !== 0) {
                 autocomplete_position = 0;
-                command = autocomplete_current_result;
+                command               = autocomplete_current_result;
             }
 
             if (command.toLowerCase().split(' ')[0] in commands) {
@@ -694,16 +717,16 @@ $terminal = new TerminalPHP();
 
                 showLoader()
                 await $.ajax({
-                    type: 'POST',
-                    data: {command: command, path: path},
-                    cache: false,
+                    type    : 'POST',
+                    data    : {command: command, path: path},
+                    cache   : false,
                     dataType: 'json',
-                    success: function (response) {
+                    success : function (response) {
                         path = response.path;
                         $('terminal .content').append('<line>' + response.result + '</line>');
                         hideLoader()
                     },
-                    error:function (){
+                    error   : function () {
                         hideLoader()
                     }
                 });
@@ -724,7 +747,7 @@ $terminal = new TerminalPHP();
 
             if (autocomplete_position !== 0) {
                 autocomplete_position = 0;
-                command = autocomplete_current_result;
+                command               = autocomplete_current_result;
             }
 
             if (keyCode === 35)
@@ -881,12 +904,12 @@ $terminal = new TerminalPHP();
             autocomplete_search_for   = command;
             autocomplete_temp_results = [];
 
-            let parts = command.split(' ');
-            let cmd = parts[0];
+            let parts         = command.split(' ');
+            let cmd           = parts[0];
             let cmd_parameter = parts[1] || '';
 
             if (parts.length === 1) {
-                let executableList               = commands_list.concat(Object.keys(commands));
+                let executableList        = commands_list.concat(Object.keys(commands));
                 autocomplete_temp_results = executableList.filter(function (cm) {
                     return (cm.length > command.length && cm.substr(0, command.length).toLowerCase() == command.toLowerCase());
                 })
@@ -894,7 +917,7 @@ $terminal = new TerminalPHP();
                         return b.length - a.length;
                     });
             } else if (parts.length === 2) {
-                var temp_cmd      = '';
+                var temp_cmd = '';
 
                 if (cmd === 'cd' || cmd === 'cp' || cmd === 'mv' || cmd === 'cat' || cmd === 'rm') {
                     switch (cmd) {
@@ -912,11 +935,11 @@ $terminal = new TerminalPHP();
                     }
 
                     await $.ajax({
-                        type   : 'POST',
-                        data   : {command: temp_cmd, path: path},
-                        cache  : false,
+                        type    : 'POST',
+                        data    : {command: temp_cmd, path: path},
+                        cache   : false,
                         dataType: 'json',
-                        success: function (response) {
+                        success : function (response) {
                             autocomplete_temp_results = response.result.split('<br>')
                                 .filter(function (cm) {
                                     return (cm.length !== 0);

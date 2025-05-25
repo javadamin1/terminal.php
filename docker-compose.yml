@@ -1,0 +1,10 @@
+
+services:
+  app:
+    image: php:8.2-apache
+    container_name: terminal
+    ports:
+      - "7171:80"
+    volumes:
+      - ./:/var/www/html
+
