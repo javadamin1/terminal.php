@@ -23,6 +23,55 @@ if ( !function_exists('shell_exec') ) {
 	die('Sorry, this server has blocked shell access :(');
 }
 
+/**
+ *  config
+ */
+$config = [
+	'tools'           => [
+		'cacheFile' => __DIR__ . '/cache/commands.json',
+		'cache'     => true,    // bool active or not active
+		'expireAt'  => 'never', // OR integer by hour like 24 for 1 day,
+		'useful'    => [ // tools list for search in install tools
+			'git',
+			'composer',
+			'php',
+			'npm',
+			'node',
+			'yarn',
+			'curl',
+			'wget',
+			'htop',
+			'top',
+			'ping',
+			'vim',
+			'nano',
+			'ssh',
+			'scp',
+			'zip',
+			'unzip',
+			'tar',
+			'make',
+			'gcc',
+			'git-lfs',
+			'python3',
+			'pip3',
+			'telnet',
+			'gzip',
+			'g++'
+		]
+	],
+	'blockedCommands' => [/*'mkdir',
+        'rm',
+        'git',
+        'wget',
+        'curl',
+        'chmod',
+        'rename',
+        'mv',
+        'cp'*/
+	]
+];
+
 class CustomCommands {
 
 	/***************************************************************
@@ -124,23 +173,17 @@ class Helper {
 class TerminalPHP {
 
 	/* These commands are not executed */
-	private $blocked_commands = [/*'mkdir',
-        'rm',
-        'git',
-        'wget',
-        'curl',
-        'chmod',
-        'rename',
-        'mv',
-        'cp'*/
-	];
+	private array $config = [];
 
 	/**
 	 * initialize Class
 	 *
 	 * @param $path string default path to start
 	 */
-	public function __construct ($path = '') {
+	public function __construct (string $path = '', $config = []) {
+		if ( !empty($config) && is_array($config) ) {
+			$this->config = $config;
+		}
 		$this->_cd($path);
 	}
 
@@ -153,23 +196,10 @@ class TerminalPHP {
 	 */
 	private function shell ($cmd) {
 		$resp = shell_exec($cmd . ' 2>&1 ');
+
 		return $resp ? trim($resp) : $resp;
 	}
 
-	/**
-	 * Check Command Exists
-	 *
-	 * @param $command string command to check
-	 *
-	 * @return bool
-	 */
-	private function commandExists ($command) {
-		if ( $this->shell('command -v ' . $command) ) {
-			return true;
-		}
-
-		return false;
-	}
 
 	/**
 	 * Run Commands as Class method
@@ -206,14 +236,13 @@ class TerminalPHP {
 			return escapeshellarg($value);
 		}, $args);
 		$arg         = count($args) > 0 ? implode(' ', $args) : '';
-
-		if ( array_search($cmd, $this->getLocalCommands()) !== false ) {
-			$lcmd = '_' . $cmd;
-
-			return $this->$lcmd($arg);
-		} else if ( array_search($cmd, $this->blocked_commands) !== false ) {
+		// create local commend name
+		$localCmd = '_' . $cmd;
+		if ( in_array($localCmd, $this->getLocalCommands()) ) {
+			return $this->$localCmd($arg);
+		} else if ( $this->isCommandBlocked($cmd) ) {
 			return 'terminal.php: Permission denied';
-		} else if ( $this->commandExists($cmd) ) {
+		} else if ( $this->isCommandAvailable($cmd) ) {
 			$fullCmd = $cmd . ' ' . implode(' ', $escapedArgs);
 
 			return $this->shell($fullCmd);
@@ -229,8 +258,8 @@ class TerminalPHP {
 	 *
 	 * @return string
 	 */
-	public function normalizeHtml ($input) {
-		if ( empty($input) ) {
+	public function normalizeHtml (string $input) : string {
+		if ( empty($input)) {
 			return '';
 		}
 
@@ -243,20 +272,44 @@ class TerminalPHP {
 		], $input);
 	}
 
+
 	/**
 	 * Array of Local Commands
 	 *
 	 * @return array
 	 */
-	private function getLocalCommands () {
-		$commands = array_filter(get_class_methods($this), function ($i) {
-			return ($i[0] == '_' && $i[1] != '_');
+	private function getLocalCommands () : array {
+		return array_filter(get_class_methods($this), function ($methodName) {
+			return strpos($methodName, '_') === 0 && strpos($methodName, '__') !== 0;
 		});
-		foreach ( $commands as $i => $command ) {
-			$commands[$i] = substr($command, 1);
+	}
+
+	/**
+	 * @param $cmd string check commend exist
+	 *
+	 * @return bool
+	 */
+	public function isCommandAvailable (string $cmd) : bool {
+		$cmd = escapeshellarg($cmd);
+		if ( $this->shell('command -v ' . $cmd) ) {
+			return true;
+		}
+		$output = shell_exec("which $cmd 2>/dev/null");
+
+		return !empty($output) && !empty(trim($output));
+	}
+
+	/**
+	 * @param $cmd string check comment is blocked in config
+	 *
+	 * @return bool
+	 */
+	private function isCommandBlocked (string $cmd) : bool {
+		if ( !$this->config || !isset($this->config['blockedCommands']) ) {
+			return false;
 		}
 
-		return $commands;
+		return is_array($this->config['blockedCommands']) && in_array($cmd, $this->config['blockedCommands']);
 	}
 
 	/**
@@ -264,8 +317,153 @@ class TerminalPHP {
 	 *
 	 * @return array
 	 */
-	public function commandsList () {
+	public function commandsList () : array {
 		return array_merge(explode("\n", $this->ls('/usr/bin')), get_class_methods('CustomCommands'));
+	}
+
+	/**
+	 * @param string $filePath crate file and path if not exist
+	 *
+	 * @return string
+	 */
+	private function ensureCommandsCacheFile (string $filePath) : string {
+		$dirPath = dirname($filePath);
+
+		if ( !is_dir($dirPath) ) {
+			mkdir($dirPath, 0775, true);
+		}
+		if ( !file_exists($filePath) ) {
+			file_put_contents($filePath, json_encode([], JSON_PRETTY_PRINT));
+		}
+
+		return $filePath;
+	}
+
+	private function getAvailableCommandsFromCache () : array {
+		if ( $this->config && isset($this->config['tools']) ) {
+			$tools         = $this->config['tools'];
+			$isActiveCache = $tools['cache'] ?? false;
+			if ( $isActiveCache ) {
+				$cacheFile = $tools['cacheFile'] ?? '';
+				$expireAt  = $tools['expireAt'] ?? '';
+				$time      = time();
+				if ( !empty($expireAt) && $expireAt == 'never' ) {
+					$expireAt = $time + 3600;
+				} else {
+					$expireAt = intval($expireAt) > 0 ? intval($expireAt) * 3600 : $time + 3600;
+				}
+				if ( !empty($cacheFile) ) {
+					$cacheFile = $this->ensureCommandsCacheFile($cacheFile);
+				}
+				if ( file_exists($cacheFile) ) {
+					$data     = json_decode(file_get_contents($cacheFile), true);
+					$isExpire = isset($data['time']) && ($time - $data['time']) < $expireAt;
+					if ( is_array($data) && $isExpire && isset($data['commands']) ) {
+						return $data['commands'];
+					} else {
+						$commands = $this->listAllCommands();
+						@file_put_contents($cacheFile, json_encode([
+							'time'     => time(),
+							'commands' => $commands
+						]));
+
+						return $commands;
+					}
+				}
+
+			}
+		}
+		Helper::dd('else', $this->config);
+
+		return $this->listAllCommands();
+	}
+
+	private function filterUsefulCommend ($term = '') : array {
+		$useful = $this->config['tools']['useful'] ?? null;
+
+		return array_filter($useful, function ($cmd) use ($term) {
+			if ( empty($term) ) {
+				return $this->isCommandAvailable($cmd);
+			}
+
+			return stripos($cmd, $term) !== false && $this->isCommandAvailable($cmd);
+		});
+	}
+
+	public function searchAllCommands ($term) : string {
+		$term     = strtolower($term);
+		$commands = $this->getAvailableCommandsFromCache();
+		$found    = array_filter($commands, function ($cmd) use ($term) {
+			return stripos($cmd, $term) !== false;
+		});
+
+		return empty($found) ? "No command found matching '$term'." : implode("\n", $found);
+	}
+
+	public function searchInUsefulCommands ($term) : string {
+		$useful = $this->filterUsefulCommend($term);
+		if ( !$useful ) {
+			return $this->searchAllCommands($term);
+		}
+
+		return empty($useful) ? "No matching command found." : implode("\n", $useful);
+	}
+
+	/**
+	 *  For create uniq array use array key
+	 *
+	 * @return array
+	 */
+	public function listAllCommands () : array {
+		$paths    = explode(':', getenv('PATH'));
+		$commands = [];
+		foreach ( $paths as $dir ) {
+			if ( !is_dir($dir) ) {
+				continue;
+			}
+			foreach ( scandir($dir) as $file ) {
+				$full = $dir . '/' . $file;
+				if ( is_file($full) && is_executable($full) ) {
+					$commands[$file] = true;
+				}
+			}
+		}
+
+		return array_keys($commands); // Unique command list
+	}
+
+	public function _tools ($arg) : string {
+
+		$arg     = trim($arg);
+		$explode = explode(' ', $arg);
+		$cmd     = $explode[0] ?? '';
+		$arg     = $explode[1] ?? '';
+
+		if ( in_array($cmd, ['ls', 'list', 'la']) ) {
+			$commends = $this->getAvailableCommandsFromCache();
+			if ( $cmd !== 'la' ) {
+				$filtered = $this->filterUsefulCommend();
+				if ( !empty($filtered) ) {
+					$commends = $filtered;
+				}
+			}
+
+			return implode("\n", $commends);
+		}
+
+		if ( $cmd === 'search' || $cmd === 'search-all' ) {
+			$searchTerm = trim($arg);
+			if ( empty($searchTerm) ) {
+				return 'usage: app search <keyword>';
+			}
+			if ( $cmd === 'search' ) {
+				return $this->searchInUsefulCommands($searchTerm);
+			} else {
+				return $this->searchAllCommands($searchTerm);
+			}
+		}
+
+		return 'terminal.php: Not found commend';
 	}
 
 	/************************************************************/
@@ -319,13 +517,14 @@ if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
 	$command   = explode(' ', $_REQUEST['command'])[0];
 	$arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
 	$path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
-	$terminal  = new TerminalPHP($path);
+	$terminal  = new TerminalPHP($path, $config ?? []);
 
 	if ( in_array($command, get_class_methods('CustomCommands')) ) {
 		$result = CustomCommands::$command($arguments);
 	} else {
 		$command = $terminal->runCommand($_REQUEST['command']);
 		$result  = $terminal->normalizeHtml($command);
+
 	}
 	$resp = json_encode([
 		'result' => $result,
@@ -899,7 +1098,6 @@ $terminal = new TerminalPHP();
     }
 
     async function autoComplete() {
-        console.log('aut')
         if (autocomplete_search_for !== command) {
             autocomplete_search_for   = command;
             autocomplete_temp_results = [];
