@@ -5,20 +5,28 @@ A lightweight and customizable PHP-based terminal emulator that lets you run she
 
 ---
 
+## 📸 Screenshot
+
+![Terminal UI Screenshot](assets/screenshot.png)
+
+---
+
 ## 🚀 Features
 
 - Execute server-side shell commands via web UI
 - Define custom PHP-based commands
 - Prevent execution of dangerous commands
 - Ajax-based command execution for better UX
-- Compatible with most shared hosts
+- Compatible with Laravel (CSRF/auth supported)
 - Clean HTML output formatting
+- Tools discovery & caching (with filtering/search)
 
 ---
 
 ## 🔐 Security Setup
 
-To prevent unauthorized access, set a secure `KEY` inside `terminal.php`:
+To **prevent unauthorized access**, you **must set a secure `KEY`** inside `terminal.php`.  
+The terminal will **not work with the default key**.
 
 ```php
 const KEY = 'YourRandomSecureKey';
@@ -28,7 +36,13 @@ Access the terminal only via:
 
 ```
 https://yourdomain.com/terminal.php?key=YourRandomSecureKey
+# use in Laravel 
+https://yourdomain.com/terminal?key=YourRandomSecureKey
 ```
+
+> ⚠️ **Important:**  
+> The terminal will be **disabled** if the default key is not changed.  
+> Make sure to use a long, random, and secret key to prevent unauthorized access.
 
 ---
 
@@ -65,10 +79,18 @@ To call: `hi Javad`
 
 ---
 
-## 🚫 Blocked Commands
+## 🚫 Block Dangerous Commands
 
-For security, potentially dangerous commands (e.g. `rm`, `mv`, `wget`) are blocked by default.  
-You can manage the list inside the `$blocked_commands` array.
+You can block dangerous commands like `rm`, `wget`, or `mv` to protect your server:
+
+```php
+$config = [
+    ...
+    'blockedCommands' => ['rm', 'mv', 'chmod', 'wget', 'curl', 'cp'],
+];
+```
+
+Blocked commands return a security message instead of being executed.
 
 ---
 
@@ -80,9 +102,41 @@ You can manage the list inside the `$blocked_commands` array.
 
 ---
 
-## 📸 Screenshot
+## ⚙️ Laravel Integration
 
-![Terminal UI Screenshot](assets/screenshot.png)
+Want to integrate the terminal into your Laravel app and keep it secure? Here’s how to do it the Laravel way:
+
+### ✅ Recommended Setup (with CSRF + Auth Protection)
+
+1. **Move terminal HTML content into a Blade file**
+
+   Create a new Blade view at `resources/views/terminal.blade.php` and copy the HTML content from `terminal.php` into it.
+
+2. **Enable Laravel mode in the config**
+
+   Set the Laravel mode flag in the config section of `terminal.php`:
+   
+   ```php
+   $config = [
+       'laravelMode' => true,
+       ...
+   ];
+   ```
+
+3. **Define a protected Laravel route**
+
+   Add this route to your `routes/web.php` to support both GET and POST requests:
+
+   ```php
+   use Illuminate\Support\Facades\Route;
+
+   Route::match(['get', 'post'], '/terminal', function () {
+       return view('terminal'); // or use a custom view path
+   })->middleware('auth');
+   ```
+
+   💡 This setup ensures CSRF protection and restricts terminal access to authenticated users only.
+
 ---
 
 ## 👨‍💻 Author

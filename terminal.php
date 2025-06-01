@@ -27,6 +27,7 @@ if ( !function_exists('shell_exec') ) {
  *  config
  */
 $config = [
+	'laravelMode'    => false,
 	'tools'           => [
 		'cacheFile' => __DIR__ . '/cache/commands.json',
 		'cache'     => true,    // bool active or not active
@@ -173,7 +174,8 @@ class Helper {
 class TerminalPHP {
 
 	/* These commands are not executed */
-	private array $config = [];
+	private array $config    = [];
+	private array $helpsArgs = ['-h', '--h', 'help', '--help'];
 
 	/**
 	 * initialize Class
@@ -259,7 +261,7 @@ class TerminalPHP {
 	 * @return string
 	 */
 	public function normalizeHtml (string $input) : string {
-		if ( empty($input)) {
+		if ( empty($input) ) {
 			return '';
 		}
 
@@ -439,6 +441,24 @@ class TerminalPHP {
 		$cmd     = $explode[0] ?? '';
 		$arg     = $explode[1] ?? '';
 
+		if ( in_array($cmd, $this->helpsArgs) ) {
+			return <<<HELP
+                            Usage: tools <command> [args]
+                            
+                            Available commands:
+                            
+                              tools ls         List common useful developer tools available on this system
+                              tools la         List all available system commands (cached)
+                              tools search     Search in common developer tools (e.g., tools search git)
+                              tools search-all Search in all available commands
+                              tools help       Show this help message
+                            
+                            Note:
+                              - "ls" and "search" use a predefined list of popular developer tools.
+                              - "la" and "search-all" check all commands in your system's PATH.
+                            HELP;
+		}
+
 		if ( in_array($cmd, ['ls', 'list', 'la']) ) {
 			$commends = $this->getAvailableCommandsFromCache();
 			if ( $cmd !== 'la' ) {
@@ -465,6 +485,8 @@ class TerminalPHP {
 
 		return 'terminal.php: Not found commend';
 	}
+
+
 
 	/************************************************************/
 	/*                      Local Commands                      */
@@ -511,14 +533,22 @@ class TerminalPHP {
 
 }
 
+$laravelMode = isset($config['laravelMode']) && $config['laravelMode'];
 
 /* Check if Request is Ajax */
 if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' && isset($_POST['command']) ) {
+
 	$command   = explode(' ', $_REQUEST['command'])[0];
 	$arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
 	$path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
 	$terminal  = new TerminalPHP($path, $config ?? []);
-
+	if (KEY === 'Mmbuge8maD5VAUMc'){
+		$resp = json_encode([
+			'result' => 'terminal.php: invalid key id',
+			'path'   => $terminal->pwd()
+		]);
+		exit($resp);
+	}
 	if ( in_array($command, get_class_methods('CustomCommands')) ) {
 		$result = CustomCommands::$command($arguments);
 	} else {
@@ -542,7 +572,16 @@ $terminal = new TerminalPHP();
 <head>
     <meta charset="utf-8">
     <title>Terminal.php</title>
-    <link href="https://cdn.rawgit.com/rastikerdar/vazir-code-font/v1.1.2/dist/font-face.css" rel="stylesheet" type="text/css"/>
+    <link href="https://cdn.rawgit.com/rastikerdar/vazir-code-font/v1.1.2/dist/font-face.css" rel="stylesheet"
+          type="text/css"/>
+    <?php
+    if ($laravelMode){
+        ?>
+        <meta name="csrf-token" content="<?= function_exists('csrf_token') ? csrf_token() : '' ?>">
+    <?php
+    }
+    ?>
+
     <style>
         :root {
             --background-url: url('http://files.javadfathi.ir/terminal-background.jpeg');
@@ -866,6 +905,7 @@ $terminal = new TerminalPHP();
     var autocomplete_search_for     = '';
     var autocomplete_temp_results   = [];
     var autocomplete_current_result = '';
+    let laravelMode = <?= $laravelMode ? 'true' : 'false' ?>;
 
     $(document).bind('paste', function (e) {
         let data = e.originalEvent.clipboardData.getData('Text');
@@ -917,6 +957,9 @@ $terminal = new TerminalPHP();
                 showLoader()
                 await $.ajax({
                     type    : 'POST',
+                    headers : {
+                        'X-CSRF-TOKEN': laravelMode ? $('meta[name="csrf-token"]').attr('content') : ''
+                    },
                     data    : {command: command, path: path},
                     cache   : false,
                     dataType: 'json',
@@ -1134,6 +1177,9 @@ $terminal = new TerminalPHP();
 
                     await $.ajax({
                         type    : 'POST',
+                        headers : {
+                            'X-CSRF-TOKEN': laravelMode ? $('meta[name="csrf-token"]').attr('content') : ''
+                        },
                         data    : {command: temp_cmd, path: path},
                         cache   : false,
                         dataType: 'json',
