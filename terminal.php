@@ -1,5 +1,9 @@
 <?php
 
+if ( session_status() === PHP_SESSION_NONE ) {
+	session_start();
+}
+
 // For this 'fatal: $HOME not set' error set Home
 #putenv("HOME=/tmp");
 #putenv('COMPOSER_HOME=/home/yourDomainName');
@@ -11,12 +15,28 @@
  * @author   SmartWF <hi@smartwf.ir>
  */
 
-/* Choose a random key Like ('Mmbuge8maD5VAUMc') for Security */
-const KEY = 'Mmbuge8maD5VAUMc';
-$isset = isset($_GET['key']);
-$key   = $_GET['key'] ?? null;
-if ( KEY != '' && !$isset && $key != KEY ) {
+/* Choose a random key Like ('YourRandomSecureKey') for Security */
+const KEY = 'YourRandomSecureKey';
+
+if ( KEY !== '' ) {
+	$userKey = $_GET['key'] ?? null;
+	if ( $userKey !== KEY ) {
+		$_SESSION['key_attempts'] = ($_SESSION['key_attempts'] ?? 0) + 1;
+
+		if ( $_SESSION['key_attempts'] > 3 ) {
+			http_response_code(429);
+			exit('Too many invalid attempts. Try again later.');
+		}
+
+		http_response_code(403);
+		exit('Access denied.');
+	}
+
+	unset($_SESSION['key_attempts']);
+}
+if ( (KEY !== '' && !isset($_GET['key'])) || (KEY !== '' && isset($_GET['key']) && $_GET['key'] !== KEY) ) {
 	header('location: /');
+	exit();
 }
 
 if ( !function_exists('shell_exec') ) {
@@ -27,7 +47,7 @@ if ( !function_exists('shell_exec') ) {
  *  config
  */
 $config = [
-	'laravelMode'    => false,
+	'laravelMode'     => false,
 	'tools'           => [
 		'cacheFile' => __DIR__ . '/cache/commands.json',
 		'cache'     => true,    // bool active or not active
@@ -542,9 +562,9 @@ if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
 	$arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
 	$path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
 	$terminal  = new TerminalPHP($path, $config ?? []);
-	if (KEY === 'Mmbuge8maD5VAUMc'){
+	if ( KEY === 'YourRandomSecureKey' ) {
 		$resp = json_encode([
-			'result' => 'terminal.php: invalid key id',
+			'result' => 'Terminal access denied. You are using the default KEY. Please edit terminal.php and set a secure, custom KEY to enable access.',
 			'path'   => $terminal->pwd()
 		]);
 		exit($resp);
@@ -574,13 +594,13 @@ $terminal = new TerminalPHP();
     <title>Terminal.php</title>
     <link href="https://cdn.rawgit.com/rastikerdar/vazir-code-font/v1.1.2/dist/font-face.css" rel="stylesheet"
           type="text/css"/>
-    <?php
-    if ($laravelMode){
-        ?>
+	<?php
+	if ( $laravelMode ) {
+		?>
         <meta name="csrf-token" content="<?= function_exists('csrf_token') ? csrf_token() : '' ?>">
-    <?php
-    }
-    ?>
+		<?php
+	}
+	?>
 
     <style>
         :root {
@@ -905,7 +925,7 @@ $terminal = new TerminalPHP();
     var autocomplete_search_for     = '';
     var autocomplete_temp_results   = [];
     var autocomplete_current_result = '';
-    let laravelMode = <?= $laravelMode ? 'true' : 'false' ?>;
+    let laravelMode                 = <?= $laravelMode ? 'true' : 'false' ?>;
 
     $(document).bind('paste', function (e) {
         let data = e.originalEvent.clipboardData.getData('Text');
