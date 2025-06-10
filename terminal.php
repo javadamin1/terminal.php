@@ -16,7 +16,8 @@ if ( session_status() === PHP_SESSION_NONE ) {
  */
 
 /* Choose a random key Like ('YourRandomSecureKey') for Security */
-const KEY = 'YourRandomSecureKey';
+const VERSION = '1.1.0';
+const KEY     = 'YourRandomSecureKey';
 
 if ( KEY !== '' ) {
 	$userKey = $_GET['key'] ?? null;
@@ -34,13 +35,14 @@ if ( KEY !== '' ) {
 
 	unset($_SESSION['key_attempts']);
 }
+
 if ( (KEY !== '' && !isset($_GET['key'])) || (KEY !== '' && isset($_GET['key']) && $_GET['key'] !== KEY) ) {
 	header('location: /');
 	exit();
 }
 
 if ( !function_exists('shell_exec') ) {
-	die('Sorry, this server has blocked shell access :(');
+	exit('Sorry, this server has blocked shell access :(');
 }
 
 /**
@@ -48,11 +50,11 @@ if ( !function_exists('shell_exec') ) {
  */
 $config = [
 	'laravelMode'     => false,
+	'cacheFile'       => __DIR__ . '/cache/cache.json',
+	'temporaryCache'  => 'cookie', // none,cookie,session
 	'tools'           => [
-		'cacheFile' => __DIR__ . '/cache/commands.json',
-		'cache'     => true,    // bool active or not active
-		'expireAt'  => 'never', // OR integer by hour like 24 for 1 day,
-		'useful'    => [ // tools list for search in install tools
+		'cache'  => 'month',    // forever,day,week,month
+		'useful' => [ // tools list for search in install tools
 			'git',
 			'composer',
 			'php',
@@ -90,7 +92,9 @@ $config = [
         'rename',
         'mv',
         'cp'*/
-	]
+	],
+	'checkUpdate'     => 'day', // none,day,week,month
+	'debugMode'       => true
 ];
 
 class CustomCommands {
@@ -189,6 +193,293 @@ class Helper {
 		}
 	}
 
+	/**
+	 * @param string $data
+	 *
+	 * @return string
+	 */
+	public static function encode (?string $data) : string {
+		if ( $data ) {
+			return '';
+		}
+		$rotated = str_rot13($data);
+		$hexed   = bin2hex($rotated);
+
+		return strrev($hexed);
+	}
+
+	/**
+	 * @param string|null $encoded
+	 *
+	 * @return string|null
+	 */
+	public static function decode (?string $encoded) : ?string {
+		if ( empty($encoded) ) {
+			return null;
+		}
+		$reversed = strrev($encoded);
+		$rotated  = hex2bin($reversed);
+
+		if ( $rotated === false ) {
+			return null;
+		}
+
+		return str_rot13($rotated);
+	}
+
+
+}
+
+class Cache {
+
+	private static ?self $instance       = null;
+	private ?string      $cacheFile      = '';
+	private string       $temporaryCache = '';
+	private ?array       $config         = null;
+
+	private function __construct () {
+		$this->boot();
+	}
+
+	public static function getInstance () : Cache {
+		if ( is_null(self::$instance) ) {
+			self::$instance = new self();
+		}
+
+		return self::$instance;
+	}
+
+	private function boot () {
+
+		if ( is_null($this->config) ) {
+			global $config;
+			$cacheFile      = '';
+			$temporaryCache = '';
+			$this->config   = $config ?? [];
+
+			if ( $this->config && is_array($this->config) && isset($this->config['cacheFile']) ) {
+				$cacheFile      = $this->config['cacheFile'];
+				$temporaryCache = $this->config['temporaryCache'] ?? '';
+			}
+			if ( empty($cacheFile) ) {
+				$cacheFile = __DIR__ . '/cache/cache.json';
+			}
+
+			$this->cacheFile      = $this->ensureCommandsCacheFile($cacheFile);
+			$this->temporaryCache = $temporaryCache;
+		}
+
+	}
+
+	/**
+	 * @param string $filePath crate file and path if not exist
+	 *
+	 * @return string
+	 */
+	private function ensureCommandsCacheFile (string $filePath) : string {
+		$dirPath = dirname($filePath);
+
+		if ( !is_dir($dirPath) ) {
+			mkdir($dirPath, 0775, true);
+		}
+		if ( !file_exists($filePath) ) {
+			file_put_contents($filePath, json_encode([], JSON_PRETTY_PRINT));
+		}
+
+		return $filePath;
+	}
+
+	private function getData (string $key = '') {
+		if ( !empty($this->temporaryCache) ) {
+			$cache = '';
+			if ( $this->temporaryCache === 'session' && isset($_SESSION['terminalCache']) ) {
+				$cache = Helper::decode($_SESSION['terminalCache']);
+			} elseif ( $this->temporaryCache === 'cookie' && isset($_COOKIE['terminalCache']) ) {
+				$cache = Helper::decode($_COOKIE['terminalCache']);
+			}
+			if ( !empty($cache) && is_string($cache) ) {
+				$data = json_decode($cache, true);
+				if ( $data !== false ) {
+					return $key ? ($data[$key] ?? null) : $data;
+				}
+			}
+		}
+		if ( file_exists($this->cacheFile) ) {
+			$json = file_get_contents($this->cacheFile);
+			if ( !empty($this->temporaryCache) ) {
+				if ( $this->temporaryCache === 'session' ) {
+					$_SESSION['terminalCache'] = Helper::encode($json);
+				} elseif ( $this->temporaryCache === 'cookie' && isset($_COOKIE['terminalCache']) ) {
+					$_COOKIE['terminalCache'] = Helper::encode($json);
+				}
+			}
+			$data = json_decode($json, true);
+
+			return $key ? ($data[$key] ?? null) : $data;
+		}
+	}
+
+	private function setData ($key, $value) {
+
+		if ( file_exists($this->cacheFile) ) {
+			$data        = $this->getData() ?? [];
+			$data[$key]  = $value;
+			$json        = json_encode($data);
+			$fileCreated = @file_put_contents($this->cacheFile, $json);
+			if ( $fileCreated !== false ) {
+				if ( $this->temporaryCache === 'session' ) {
+					$_SESSION['terminalCache'] = Helper::encode($json);
+				} elseif ( $this->temporaryCache === 'cookie' && isset($_COOKIE['terminalCache']) ) {
+					$_COOKIE['terminalCache'] = Helper::encode($json);
+				}
+			}
+
+			return $fileCreated;
+		}
+	}
+
+	/**
+	 * @param string $key
+	 *
+	 * @return bool
+	 */
+	private function deleteData (string $key) : bool {
+		if ( file_exists($this->cacheFile) ) {
+			$data = $this->getData() ?? [];
+			if ( array_key_exists($key, $data) ) {
+				unset($data[$key]);
+			}
+			$json        = json_encode($data);
+			$fileCreated = @file_put_contents($this->cacheFile, $json);
+			if ( $fileCreated !== false ) {
+				if ( $this->temporaryCache === 'session' ) {
+					$_SESSION['terminalCache'] = Helper::encode($json);
+				} elseif ( $this->temporaryCache === 'cookie' && isset($_COOKIE['terminalCache']) ) {
+					$_COOKIE['terminalCache'] = Helper::encode($json);
+				}
+			}
+
+			return $fileCreated !== false;
+		}
+
+		return false;
+	}
+
+
+	/**
+	 * Get the option value with caching.
+	 *
+	 * @param string     $path
+	 * @param mixed|null $default
+	 * @param bool       $returnModel
+	 *
+	 * @return mixed
+	 */
+	public function get (string $path, mixed $default = null, bool $returnModel = false) {
+		if ( empty($path) ) {
+			return $default;
+		}
+		$pathList = explode('.', $path);
+		$key      = $pathList[0];
+		unset($pathList[0]);
+		$data = $this->getData($key);
+		if ( empty($data) ) {
+			return $default;
+		}
+		if ( empty($pathList) || is_scalar($data) ) {
+			return $data;
+		}
+
+		return self::resolveOptionValue($data, $pathList, $default);
+	}
+
+
+	/**
+	 * Resolve the option value from array data based on path.
+	 *
+	 * @param       $data
+	 * @param array $pathList
+	 * @param mixed $default
+	 *
+	 * @return mixed
+	 */
+	private static function resolveOptionValue ($data, array $pathList, $default) {
+
+		foreach ( $pathList as $key ) {
+			if ( isset($data[$key]) ) {
+				$data = $data[$key];
+			} else {
+				return $default;
+			}
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Set the option value and cache the result.
+	 *
+	 * @param string $path
+	 * @param        $value
+	 *
+	 * @return bool
+	 */
+	public function set (string $path, $value) : bool {
+		$pathList = explode('.', $path);
+		$key      = $pathList[0];
+		unset($pathList[0]);
+		$data = $this->getData($key) ?? [];
+		try {
+			if ( empty($pathList) ) {
+				if ( $value === 'unset' ) {
+					$this->deleteData($key);
+
+					return true;
+				} else {
+					$data = $value;
+				}
+			} else {
+				$data = self::setValueInArray($data, $pathList, $value);
+			}
+			$this->setData($key, $data);
+
+			return true;
+		} catch ( \Throwable $e ) {
+			return false;
+		}
+	}
+
+
+	/**
+	 * Set value in array structure.
+	 *
+	 * @param array $data
+	 * @param array $pathList
+	 * @param mixed $item
+	 *
+	 * @return array
+	 */
+	private static function setValueInArray (array $data, array $pathList, $item) : array {
+
+		$index = array_shift($pathList);
+		if ( empty($pathList) ) {
+			if ( $item === 'unset' ) {
+				unset($data[$index]);
+			} else {
+				$data[$index] = $item;
+			}
+		} else {
+
+			if ( !isset($data[$index]) ) {
+				$data[$index] = [];
+			}
+			$data[$index] = self::setValueInArray($data[$index], $pathList, $item);
+		}
+
+		return $data;
+	}
+
+
 }
 
 class TerminalPHP {
@@ -207,6 +498,78 @@ class TerminalPHP {
 			$this->config = $config;
 		}
 		$this->_cd($path);
+	}
+
+	/**
+	 *
+	 * @return array|false|null
+	 */
+	public function checkUpdate () {
+		$cache          = Cache::getInstance();
+		$lastCheckTime  = $cache->get('checkUpdate.lastTime');
+		$lastUpdateInfo = $cache->get('checkUpdate.lastUpdateInfo');
+		$isUpdateTime   = false;
+		$now            = time();
+		if ( isset($this->config['checkUpdate']) && $this->config['checkUpdate'] !== 'none' ) {
+			$day                = 3600 * 24;
+			$waitForCheckUpdate = $day;
+			if ( $this->config['checkUpdate'] == 'week' ) {
+				$waitForCheckUpdate = $day * 7;
+			} else if ( $this->config['checkUpdate'] == 'month' ) {
+				$waitForCheckUpdate = $day * 30;
+			}
+			if ( empty($lastCheckTime) || $now > ($lastCheckTime + $waitForCheckUpdate) ) {
+				$isUpdateTime = true;
+			}
+		}
+
+		$isUpdateCheckTime = $isUpdateTime && isset($this->config['debugMode']) && $this->config['debugMode'] === false;
+		if ( $isUpdateCheckTime ) {
+			$url  = "https://api.github.com/repos/javadamin1/terminal.php/releases/latest";
+			$opts = [
+				'http' => [
+					'method'  => 'GET',
+					'header'  => [
+						'User-Agent: PHP-Terminal',
+						'Accept: application/vnd.github.v3+json',
+					],
+					'timeout' => 5
+				]
+			];
+
+			$context  = stream_context_create($opts);
+			$response = @file_get_contents($url, false, $context);
+			$cache->set('checkUpdate.lastTime', $now);
+
+			if ( !$response ) {
+				return null;
+			}
+
+			$data = json_decode($response, true);
+			if ( !isset($data['tag_name']) ) {
+				return null;
+			}
+
+			$latestVersion = ltrim($data['tag_name'], 'v');
+			if ( version_compare($latestVersion, VERSION, '>') ) {
+				$updateInfo = [
+					'version'   => $latestVersion,
+					'changelog' => $data['html_url'] ?? null,
+					'body'      => $data['body'] ?? null,
+				];
+				$cache->set('checkUpdate.lastUpdateInfo', $updateInfo);
+
+				return $updateInfo;
+			}
+		}
+
+		if ( isset($lastUpdateInfo['version']) ) {
+			if ( version_compare($lastUpdateInfo['version'], VERSION, '>') ) {
+				return $lastUpdateInfo;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -247,17 +610,7 @@ class TerminalPHP {
 		$args = explode(' ', $command);
 		$cmd  = $args[0];
 		unset($args[0]);
-		// For wildcard
-		$allowedForWildcard = ['ls', 'cat'];
-
-		$escapedArgs = array_map(function ($value) use ($cmd, $allowedForWildcard) {
-			if ( in_array($cmd, $allowedForWildcard) && preg_match('/^[\w\-\.\*\/]+$/', $value) ) {
-				return $value;
-			}
-
-			return escapeshellarg($value);
-		}, $args);
-		$arg         = count($args) > 0 ? implode(' ', $args) : '';
+		$arg = count($args) > 0 ? implode(' ', $args) : '';
 		// create local commend name
 		$localCmd = '_' . $cmd;
 		if ( in_array($localCmd, $this->getLocalCommands()) ) {
@@ -265,7 +618,7 @@ class TerminalPHP {
 		} else if ( $this->isCommandBlocked($cmd) ) {
 			return 'terminal.php: Permission denied';
 		} else if ( $this->isCommandAvailable($cmd) ) {
-			$fullCmd = $cmd . ' ' . implode(' ', $escapedArgs);
+			$fullCmd = $cmd . ' ' . $arg;
 
 			return $this->shell($fullCmd);
 		} else {
@@ -343,59 +696,39 @@ class TerminalPHP {
 		return array_merge(explode("\n", $this->ls('/usr/bin')), get_class_methods('CustomCommands'));
 	}
 
-	/**
-	 * @param string $filePath crate file and path if not exist
-	 *
-	 * @return string
-	 */
-	private function ensureCommandsCacheFile (string $filePath) : string {
-		$dirPath = dirname($filePath);
-
-		if ( !is_dir($dirPath) ) {
-			mkdir($dirPath, 0775, true);
-		}
-		if ( !file_exists($filePath) ) {
-			file_put_contents($filePath, json_encode([], JSON_PRETTY_PRINT));
-		}
-
-		return $filePath;
-	}
 
 	private function getAvailableCommandsFromCache () : array {
 		if ( $this->config && isset($this->config['tools']) ) {
-			$tools         = $this->config['tools'];
-			$isActiveCache = $tools['cache'] ?? false;
-			if ( $isActiveCache ) {
-				$cacheFile = $tools['cacheFile'] ?? '';
-				$expireAt  = $tools['expireAt'] ?? '';
-				$time      = time();
-				if ( !empty($expireAt) && $expireAt == 'never' ) {
-					$expireAt = $time + 3600;
-				} else {
-					$expireAt = intval($expireAt) > 0 ? intval($expireAt) * 3600 : $time + 3600;
-				}
-				if ( !empty($cacheFile) ) {
-					$cacheFile = $this->ensureCommandsCacheFile($cacheFile);
-				}
-				if ( file_exists($cacheFile) ) {
-					$data     = json_decode(file_get_contents($cacheFile), true);
-					$isExpire = isset($data['time']) && ($time - $data['time']) < $expireAt;
-					if ( is_array($data) && $isExpire && isset($data['commands']) ) {
-						return $data['commands'];
-					} else {
-						$commands = $this->listAllCommands();
-						@file_put_contents($cacheFile, json_encode([
-							'time'     => time(),
-							'commands' => $commands
-						]));
-
-						return $commands;
-					}
-				}
-
+			$tools           = $this->config['tools'];
+			$toolsCache      = $tools['cache'] ?? 'day';
+			$cache           = Cache::getInstance();
+			$lastCheckTime   = $cache->get('tools.lastCheckTime');
+			$listAllCommands = $cache->get('tools.listAllCommands');
+			$now             = time();
+			$day             = 3600 * 24;
+			$expireAt        = $day;
+			$readFromCache   = false;
+			if ( $toolsCache == 'week' ) {
+				$expireAt = $day * 7;
+			} else if ( $toolsCache == 'month' ) {
+				$expireAt = $day * 30;
 			}
+			if ( !empty($lastCheckTime) && $now < ($lastCheckTime + $expireAt) ) {
+				$readFromCache = true;
+			}
+
+			if ( $readFromCache && !empty($listAllCommands) ) {
+				return $listAllCommands;
+			}
+			$newList = $this->listAllCommands();
+			$data    = [
+				'listAllCommands' => $newList,
+				'lastCheckTime'   => $now
+			];
+			$cache->set('tools', $data);
+
+			return $newList;
 		}
-		Helper::dd('else', $this->config);
 
 		return $this->listAllCommands();
 	}
@@ -562,7 +895,7 @@ if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
 	$arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
 	$path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
 	$terminal  = new TerminalPHP($path, $config ?? []);
-	if ( KEY === 'YourRandomSecureKey' ) {
+	if ( KEY === 'YourRandomSecureKey' && isset($config['debugMode']) && $config['debugMode'] === false ) {
 		$resp = json_encode([
 			'result' => 'Terminal access denied. You are using the default KEY. Please edit terminal.php and set a secure, custom KEY to enable access.',
 			'path'   => $terminal->pwd()
@@ -584,7 +917,7 @@ if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
 	exit($resp);
 }
 
-$terminal = new TerminalPHP();
+$terminal = new TerminalPHP('', $config ?? []);
 ?>
 
 <!DOCTYPE html>
@@ -650,12 +983,38 @@ $terminal = new TerminalPHP();
             color: #29a9ff;
         }
 
+        #header {
+            height: 5em;
+        }
+
+        #header .update {
+            background: #699f22;
+            padding: 1em;
+            border: 1px solid #207604;
+            color: #000000;
+            margin: 1em;
+            width: max-content;
+            border-radius: 15px;
+            max-height: 2em;
+        }
+
+        #header .update a {
+            font-weight: bold;
+            color: #f5f1f1;
+        }
+
+        #terminal {
+            display: flex;
+            justify-content: center;
+            height: 80vh;
+            width: 100%;
+        }
+
         terminal {
             display: block;
             width: 80vw;
-            height: 80vh;
+            height: 100%;
             position: relative;
-            margin: 7rem auto;
             background: inherit;
             border-radius: 10px;
             max-width: 70rem;
@@ -739,7 +1098,7 @@ $terminal = new TerminalPHP();
             left: 1.5%;
             top: 60px;
             width: 98%;
-            height: 92%;
+            height: 85%;
             z-index: 1;
             overflow-x: hidden;
             overflow-y: auto;
@@ -868,33 +1227,48 @@ $terminal = new TerminalPHP();
     </style>
 </head>
 <body>
-<terminal>
-    <header>
-        <div class="buttons">
-            <span class="close" title="close"></span>
-            <span class="maximize" title="maximize"></span>
-            <span class="minimize" title="minimize"></span>
-        </div>
-        <div class="terminal-title">Terminal.php
-            &nbsp; <?= '(' . ($terminal->whoami() ? $terminal->whoami() : '') . ($terminal->whoami() && $terminal->hostname() ? '@' . $terminal->hostname() : '') . ')'; ?>
-        </div>
-    </header>
-    <div id="loader-overlay">
-        <span class="loader"></span>
-    </div>
-    <div class="content">
-        <line class="current">
-            <path><?= $terminal->pwd(); ?></path>
-            <sp></sp>
-            <t>
-                <bl></bl>
-            </t>
-        </line>
-    </div>
+<div id="header">
+	<?php
+	$update = $terminal->checkUpdate();
+	if ( $update ) {
+		$currentVersion = VERSION;
+		echo "<div class='update'>⚠️ A new version <strong>{$update['version']}</strong> is available. You are using <strong>{$currentVersion}</strong>. 
+    <a href='https://github.com/javadamin1/terminal.php/releases' target='_blank'>Update now</a></div>";
+	}
+	?>
+</div>
+<div id="terminal">
+    <terminal>
 
-</terminal>
+        <header>
+            <div class="buttons">
+                <span class="close" title="close"></span>
+                <span class="maximize" title="maximize"></span>
+                <span class="minimize" title="minimize"></span>
+            </div>
+            <div class="terminal-title">Terminal.php
+                &nbsp; <?= '(' . ($terminal->whoami() ? $terminal->whoami() : '') . ($terminal->whoami() && $terminal->hostname() ? '@' . $terminal->hostname() : '') . ')'; ?>
+            </div>
+        </header>
+        <div id="loader-overlay">
+            <span class="loader"></span>
+        </div>
+        <div class="content">
+            <line class="current">
+                <path><?= $terminal->pwd(); ?></path>
+                <sp></sp>
+                <t>
+                    <bl></bl>
+                </t>
+            </line>
+        </div>
 
-<footer>Coded by <a href="https://github.com/smartwf">SmartWF</a></footer>
+    </terminal>
+</div>
+
+
+<footer>Coded by <a href="https://github.com/smartwf">SmartWF</a>And modified BY<a href="https://github.com/javadamin1">javad
+        fathi</a></footer>
 
 <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
 <script type="text/javascript">

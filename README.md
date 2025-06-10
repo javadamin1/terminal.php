@@ -36,7 +36,7 @@ Access the terminal only via:
 
 ```
 https://yourdomain.com/terminal.php?key=YourRandomSecureKey
-# use in Laravel 
+# For Laravel integration:
 https://yourdomain.com/terminal?key=YourRandomSecureKey
 ```
 
@@ -65,6 +65,35 @@ Replace `/home/yourDomainName` with the correct home directory for your hosting 
 
 ---
 
+## ⚙️ Configuration
+
+All config options are inside `terminal.php`:
+
+```php
+$config = [
+    'laravelMode'     => false, // Set true if using with Laravel
+    'cacheFile'       => __DIR__ . '/cache/cache.json', // change to your cache path
+    'temporaryCache'  => 'cookie', // Options: none, cookie, session
+    'tools'           => [
+        'cache'  => 'month', // Options: forever, day, week, month
+        'useful' => [ // Tools to auto-detect
+            'git', 'composer', 'php', 'npm', 'node', 'yarn',
+            'curl', 'wget', 'htop', 'top', 'ping', 'vim', 'nano',
+            'ssh', 'scp', 'zip', 'unzip', 'tar', 'make', 'gcc',
+            'git-lfs', 'python3', 'pip3', 'telnet', 'gzip', 'g++'
+        ]
+    ],
+    'blockedCommands' => [
+        // Add risky commands you want to block
+        //'rm', 'mv', 'chmod', 'wget', 'curl', 'cp'
+    ],
+    'checkUpdate'     => 'day', // Options: none, day, week, month
+    'debugMode'       => false // set to true if you want debug and test
+];
+```
+
+---
+
 ## 🧩 Custom Commands
 
 You can define your own PHP-based commands inside the `CustomCommands` class:
@@ -75,13 +104,13 @@ public static function hi($args) {
 }
 ```
 
-To call: `hi Javad`
+To call in terminal: `hi Javad`
 
 ---
 
 ## 🚫 Block Dangerous Commands
 
-You can block dangerous commands like `rm`, `wget`, or `mv` to protect your server:
+Protect your server by blocking commands like:
 
 ```php
 $config = [
@@ -90,52 +119,49 @@ $config = [
 ];
 ```
 
-Blocked commands return a security message instead of being executed.
+Blocked commands return a warning and are not executed.
 
 ---
 
 ## 📂 File Structure
 
-- `terminal.php` - Main entry file for terminal interface
-- `CustomCommands` - Define additional PHP commands
-- `TerminalPHP` - Shell command runner and local command processor
+- `terminal.php` - Main web terminal entry file
+- `cache/cache.json` - Stores detected tools and update check data
 
 ---
 
 ## ⚙️ Laravel Integration
 
-Want to integrate the terminal into your Laravel app and keep it secure? Here’s how to do it the Laravel way:
+Want to integrate the terminal into your Laravel app and keep it secure?
 
-### ✅ Recommended Setup (with CSRF + Auth Protection)
+### ✅ Setup
 
-1. **Move terminal HTML content into a Blade file**
+1. **Enable Laravel mode**
 
-   Create a new Blade view at `resources/views/terminal.blade.php` and copy the HTML content from `terminal.php` into it.
+In `terminal.php`:
 
-2. **Enable Laravel mode in the config**
+```php
+'laravelMode' => true,
+```
 
-   Set the Laravel mode flag in the config section of `terminal.php`:
-   
-   ```php
-   $config = [
-       'laravelMode' => true,
-       ...
-   ];
-   ```
+2. **Move UI to a Blade template**
 
-3. **Define a protected Laravel route**
+Create: `resources/views/terminal.blade.php`  
+Copy Content from `terminal.php` into this Blade file.
 
-   Add this route to your `routes/web.php` to support both GET and POST requests:
+3. **Secure the route**
 
-   ```php
-   use Illuminate\Support\Facades\Route;
+In `routes/web.php`:
 
-   Route::match(['get', 'post'], '/terminal', function () {
-       return view('terminal'); // or use a custom view path
-   })->middleware('auth');
-   ```
+```php
+use Illuminate\Support\Facades\Route;
 
-   💡 This setup ensures CSRF protection and restricts terminal access to authenticated users only.
+Route::match(['get', 'post'], '/terminal', function () {
+    return view('terminal'); // or use a custom view path
+})->middleware('auth');
+```
+
+✅ This ensures CSRF protection and allows only logged-in users to access the terminal.
 
 ---
 
@@ -149,3 +175,8 @@ Originally by [SmartWF](https://github.com/smartwf)
 ## 📝 License
 
 MIT License
+## 🔗 Links
+
+- GitHub: [github.com/javadamin1/terminal.php](https://github.com/javadamin1/terminal.php)
+- Issues: [Report here](https://github.com/javadamin1/terminal.php/issues)
+
