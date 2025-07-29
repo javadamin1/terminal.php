@@ -79,7 +79,7 @@ $config = [
 			'gzip',
 			'g++'
 		],
-		'repoPath'     => __DIR__ . '/package.json',
+		'repoPath'     => __DIR__ . '/terminal-repo.json',
 		'downloadPath' => __DIR__ . '/tools/download',
 		'binPath'      => __DIR__ . '/tools/bin',
 	],
@@ -496,6 +496,7 @@ class TerminalPHP {
 	private array $config         = [];
 	private array $helpsArgs      = ['-h', '--h', 'help', '--help'];
 	private array $installContext = [];
+	private array $packages       = [];
 
 	/**
 	 * initialize Class
@@ -508,6 +509,7 @@ class TerminalPHP {
 		}
 		$this->_cd($path);
 		$this->putEnv();
+
 	}
 
 	/**
@@ -649,7 +651,7 @@ class TerminalPHP {
 	 *
 	 * @return string
 	 */
-	public function runCommand (string $command) {
+	public function runCommand (string $command) : string {
 
 		$args = explode(' ', $command);
 		$cmd  = $args[0];
@@ -792,7 +794,7 @@ class TerminalPHP {
 	public function searchAllCommands ($term) : string {
 		$term     = strtolower($term);
 		$commands = $this->getAvailableCommandsFromCache();
-		$found    = array_filter($commands, function ($cmd) use ($term) {
+		$found    = array_filter($commands, static function ($cmd) use ($term) {
 			return stripos($cmd, $term) !== false;
 		});
 
@@ -831,23 +833,53 @@ class TerminalPHP {
 		return array_keys($commands); // Unique command list
 	}
 
-	private function installTool (string $toolName) : string {
-
+	/**
+	 * load repo data
+	 */
+	private function loadPackage () : void {
 		$repoPath = $this->config['tools']['repoPath'] ?? '';
 		if ( !file_exists($repoPath) ) {
-			return "❌ Error: package repository not found.";
+			return;
+		}
+		try {
+			$this->packages = json_decode(file_get_contents($repoPath), true, 512, JSON_THROW_ON_ERROR);
+		} catch ( \Exception $e ) {
+			$this->packages = [];
 		}
 
-		$packages = json_decode(file_get_contents($repoPath), true);
+	}
+
+	private function installTool (string $toolName) : string {
+		$this->loadPackage();
+		if ( empty($this->packages) ) {
+			return "😢 Package source file not loaded";
+		}
+		$packages = $this->packages;
+		$explode  = explode('@', $toolName);
+		$toolName = $explode[0];
+		$version  = $explode[1] ?? '';
+
 
 		if ( !isset($packages[$toolName]) ) {
 			return "❌ Error: tool \"$toolName\" not found in repository.";
 		}
 
-		$tool  = $packages[$toolName];
-		$steps = $tool['install'] ?? [];
+		$tool = $packages[$toolName];
 
-		$output = "Installing {$toolName} (v{$tool['version']})...\n";
+		if ( !empty($version) && !array_key_exists($version, $tool) ) {
+			return "❌ Not found this version " . $version;
+		}
+
+		if ( !empty($version) ) {
+			$installs = $tool[$version] ?? [];
+		} else {
+			$installs = $tool['default'] ?? [];
+		}
+		if ( empty($installs) ) {
+			return "🤨 Not found install steps";
+		}
+		$steps  = $installs['install'];
+		$output = "Installing {$toolName} (v{$installs['version']})...\n";
 
 		try {
 			foreach ( $steps as $step ) {
@@ -880,24 +912,111 @@ class TerminalPHP {
 			}
 
 			$to = $this->config['tools']['downloadPath'] ?? '/tools';
-			if ( !is_dir($to) ) {
-				mkdir($to, 0755, true);
+			if ( !is_dir($to) && !mkdir($to, 0755, true) && !is_dir($to) ) {
+				throw new \ToolInstallException(sprintf('Directory "%s" was not created', $to));
 			}
 
 			$filename = basename(parse_url($url, PHP_URL_PATH));
 			$filePath = rtrim($to, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
 
 			file_put_contents($filePath, $data);
+			if ( !file_exists($filePath) ) {
+				throw new ToolInstallException("❌ Failed to download $url");
+			}
 			$this->installContext[$key] = $filePath;
 
 			return "✅ Downloaded to $filePath";
+		}
+
+		if ( $action === 'delete' ) {
+
+			$target = $this->replacePlaceholders($step['target']);
+			if ( !file_exists($target) ) {
+				return "Target not found: $target";
+			}
+
+			if ( is_file($target) ) {
+				if ( @unlink($target) ) {
+					return "Deleted file: $target";
+				} else {
+					return "Failed to delete file: $target";
+				}
+			} elseif ( is_dir($target) ) {
+				$this->shell("rm -rf " . escapeshellarg($target));
+
+				return file_exists($target) ? "Failed to delete directory: $target" : "Deleted directory: $target";
+			} else {
+				return "Unknown target type: $target";
+			}
+		}
+
+		if ( $action === 'extract' ) {
+			$file = $this->replacePlaceholders($step['file'] ?? '');
+			$dest = $this->replacePlaceholders($step['path'] ?? '');
+			$dest = Helper::fixDir($this->config['tools']['binPath'] ?? '') . ltrim($dest, '/');
+			$key  = $step['key'] ?? null;
+
+			if ( !$file || !file_exists($file) ) {
+				return "❌ Extract error: File not found or not specified: " . htmlspecialchars($file);
+			}
+
+			if ( !is_dir($dest) && !mkdir($dest, 0755, true) && !is_dir($dest) ) {
+				return "❌ Extract error: Failed to create destination directory: " . htmlspecialchars($dest);
+			}
+
+			$ext = strtolower($file);
+			if ( substr($ext, -4) === '.zip' ) {
+				if ( !class_exists('ZipArchive') ) {
+					return "❌ Extract error: PHP ZipArchive not available.";
+				}
+
+				$zip = new ZipArchive();
+				$res = $zip->open($file);
+				if ( $res === true ) {
+					if ( !$zip->extractTo($dest) ) {
+						return "❌ Extract error: Failed to extract ZIP to: " . htmlspecialchars($dest);
+					}
+					$zip->close();
+				} else {
+					return "❌ Extract error: Cannot open ZIP file. Error code: $res";
+				}
+			} elseif ( preg_match('/\.tar\.gz$|\.tgz$/', $ext) ) {
+				$cmd    = "tar -xzf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
+				$output = $this->shell($cmd);
+				if ( !is_dir($dest) || !scandir($dest) ) {
+					return "❌ Extract error: Failed to extract .tar.gz file.\nOutput:\n$output";
+				}
+
+			} elseif ( preg_match('/\.tar\.xz$/', $ext) ) {
+				$cmd    = "tar -xJf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
+				$output = $this->shell($cmd);
+				if ( !is_dir($dest) || !scandir($dest) ) {
+					return "❌ Extract error: Failed to extract .tar.xz file.\nOutput:\n$output";
+				}
+
+			} elseif ( preg_match('/\.tar$/', $ext) ) {
+				$cmd    = "tar -xf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
+				$output = $this->shell($cmd);
+				if ( !is_dir($dest) || !scandir($dest) ) {
+					return "❌ Extract error: Failed to extract .tar file.\nOutput:\n$output";
+				}
+
+			} else {
+				return "❌ Extract error: Unsupported file type: " . htmlspecialchars($ext);
+			}
+
+			if ( $key ) {
+				$this->installContext[$key] = $dest;
+			}
+
+			return "✅ Extracted successfully to: " . htmlspecialchars($dest);
 		}
 
 		if ( $action === 'shell' ) {
 			$cmd    = $this->replacePlaceholders($step['cmd']);
 			$result = $this->shell($cmd);
 
-			return "✅ Ran shell: $cmd\n" . trim($result);
+			return "✅ Ran shell: $cmd\n >" . trim($result);
 		}
 
 		if ( $action === 'symlink' ) {
@@ -999,27 +1118,35 @@ class TerminalPHP {
 
 	public function _tools ($arg) : string {
 
-		$arg     = trim($arg);
-		$explode = explode(' ', $arg);
-		$cmd     = $explode[0] ?? '';
-		$arg     = $explode[1] ?? '';
+		$arg       = trim($arg);
+		$explode   = explode(' ', $arg);
+		$cmd       = $explode[0] ?? '';
+		$arg       = $explode[1] ?? '';
+		$threeWord = $explode[2] ?? '';
 
-		if ( in_array($cmd, $this->helpsArgs) ) {
+		if ( in_array($cmd, $this->helpsArgs, true) ) {
 			return <<<HELP
                             Usage: tools <command> [args]
                             
                             Available commands:
                             
-                              tools ls         List common useful developer tools available on this system
-                              tools la         List all available system commands (cached)
-                              tools search     Search in common developer tools (e.g., tools search git)
-                              tools search-all Search in all available commands
-                              tools help       Show this help message
+                              tools ls                     List common useful developer tools available on this system
+                              tools la                     List all available system commands (cached)
+                              tools search <term>          Search among currently installed tools (local list)
+                              tools search -r <term>       Search in remote list of installable tools
+                              tools search -a <term>       Search all system commands available in PATH
+                              tools install <tool>         Install the default version of a tool (e.g., tools install node)
+                              tools install <tool>@<ver>   Install a specific version of a tool (e.g., tools install node@20.10.0)
+                              tools help                   Show this help message
                             
                             Note:
-                              - "ls" and "search" use a predefined list of popular developer tools.
-                              - "la" and "search-all" check all commands in your system's PATH.
+                              - "ls" and "search" query locally installed tools.
+                              - "search -r" queries the remote list and shows installable tools and their versions.
+                              - "search -a" searches all commands available in your system's PATH.
+                              - Use "@<version>" with "install" to install a specific version.
+                              - Multi-version tools (like node, composer, git) are supported.
                             HELP;
+
 		}
 
 		if ( in_array($cmd, ['ls', 'list', 'la']) ) {
@@ -1034,17 +1161,54 @@ class TerminalPHP {
 			return implode("\n", $commends);
 		}
 
-		if ( $cmd === 'search' || $cmd === 'search-all' ) {
+		if ( ($cmd === 'search') ) {
 			$searchTerm = trim($arg);
+
 			if ( empty($searchTerm) ) {
 				return 'usage: app search <keyword>';
 			}
-			if ( $cmd === 'search' ) {
-				return $this->searchInUsefulCommands($searchTerm);
-			} else {
-				return $this->searchAllCommands($searchTerm);
+			if ( $arg === '-a' ) {
+				return $this->searchAllCommands($threeWord);
 			}
+
+			if ( $arg === '-r' ) {
+				$this->loadPackage();
+				if ( !$this->packages ) {
+					return "😢 Package source file not loaded";
+				}
+				$exist     = [];
+				$available = array_keys($this->packages);
+				foreach ( $available as $package ) {
+					if ( strpos($package, $threeWord) !== false ) {
+						$exist[] = $package;
+					}
+				}
+				if ( empty($exist) ) {
+					return '😩 Package "' . $threeWord . '" not found';;
+				}
+				$resp = '';
+				foreach ( $exist as $value ) {
+					$data = $this->packages[$value];
+					if ( !is_array($data) ) {
+						continue;
+					}
+					$defaultVersion = $data['default']['version'] ?? '';
+					unset($data['default']);
+					$versions = array_keys($data);
+					if ( !empty($defaultVersion) ) {
+						$versions[] = $defaultVersion;
+					}
+
+					$resp .= 'Package "' . $value . '" found. available versions: [' . implode(',', $versions) . '] ';
+				}
+
+				return $resp;
+			}
+
+			return $this->searchInUsefulCommands($searchTerm);
+
 		}
+
 		if ( $cmd === 'install' ) {
 			return $this->installTool($arg);
 		}

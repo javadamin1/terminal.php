@@ -1,0 +1,169 @@
+{
+  "composer": {
+    "default" : {
+      "version": "2.7.0",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://getcomposer.org/download/latest-stable/composer.phar",
+          "key": "downloaded_file"
+        },
+        {
+          "action": "shell",
+          "cmd": "chmod +x {downloaded_file}"
+        },
+        {
+          "action": "mv",
+          "target": "{downloaded_file}",
+          "path": "composer",
+          "key": "move_file"
+        },
+        {
+          "action": "symlink",
+          "target": "{move_file}",
+          "link": "composer"
+        }
+      ]
+    },
+    "2.7.0" : {
+      "version": "2.7.0",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://getcomposer.org/download/latest-stable/composer.phar",
+          "key": "downloaded_file"
+        },
+        {
+          "action": "shell",
+          "cmd": "chmod +x {downloaded_file}"
+        },
+        {
+          "action": "mv",
+          "target": "{downloaded_file}",
+          "path": "composer",
+          "key": "move_file"
+        },
+        {
+          "action": "symlink",
+          "target": "{move_file}",
+          "link": "composer"
+        }
+      ]
+    }
+  },
+  "node": {
+    "default" : {
+      "version" : "22.17.1",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://nodejs.org/download/release/v22.17.1/node-v22.17.1-linux-x64.tar.gz",
+          "key": "node_tar"
+        },
+        {
+          "action": "extract",
+          "file": "{node_tar}",
+          "path" : ".node",
+          "key" : "node_path"
+        },
+        {
+          "action": "symlink",
+          "target": "{node_path}/node-v22.17.1-linux-x64/bin/node",
+          "link": "node"
+        },
+        {
+          "action": "symlink",
+          "target": "{node_path}/node-v22.17.1-linux-x64/bin/npm",
+          "link": "npm"
+        },
+        {
+          "action": "delete",
+          "target": "{node_tar}"
+        }
+      ]
+    },
+    "20.10.0" : {
+      "version" : "20.10.0",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://nodejs.org/dist/v20.10.0/node-v20.10.0-linux-x64.tar.xz",
+          "key": "node_tar"
+        },
+        {
+          "action": "extract",
+          "file": "{node_tar}",
+          "path" : ".node",
+          "key" : "node_path"
+        },
+        {
+          "action": "symlink",
+          "target": "{node_path}/node-v20.10.0-linux-x64/bin/node",
+          "link": "node"
+        },
+        {
+          "action": "symlink",
+          "target": "{node_path}/node-v20.10.0-linux-x64/bin/npm",
+          "link": "npm"
+        },
+        {
+          "action": "delete",
+          "target": "{node_tar}"
+        }
+      ]
+    }
+  },
+  "git": {
+    "default": {
+      "version": "2.9.5",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://www.kernel.org/pub/software/scm/git/git-2.9.5.tar.xz",
+          "key": "git_tar"
+        },
+        {
+          "action": "extract",
+          "file": "{git_tar}",
+          "path": ".git",
+          "key": "git_path"
+        },
+        {
+          "action": "symlink",
+          "target": "{git_path}/git-2.9.5/bin/git",
+          "link": "git"
+        },
+        {
+          "action": "delete",
+          "target": "{git_tar}"
+        }
+      ]
+    },
+
+    "2.44.0": {
+      "version": "2.44.0",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.44.0.tar.gz",
+          "key": "git_tar"
+        },
+        {
+          "action": "extract",
+          "file": "{git_tar}",
+          "path": ".git/{version}",
+          "key": "git_path"
+        },
+        {
+          "action": "symlink",
+          "target": "{git_path}/git-2.44.0/bin/git",
+          "link": "git"
+        },
+        {
+          "action": "delete",
+          "target": "{git_tar}"
+        }
+      ]
+    }
+  }
+}

@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.3.0] - 2025-07-29
+
+### Added
+- 🧩 Support for installing version-specific tools via `tools install <tool>@<version>`
+- 📦 Extended JSON structure to support multiple versions per tool (e.g. `node`, `composer`)
+- 🔍 Introduced `tools search -r <term>` to search in remote list of installable tools with version info
+- 🔎 Added `tools search -a <term>` to search all available system commands in PATH
+- 🧠 Context placeholders like `{version}` now supported across all install steps
+
+### Changed
+- 🆙 Updated `tools help` output to reflect new commands and clarify usage of `-r` and `-a` flags
+- 🔄 Replaced `tools search-all` with `tools search -a` for consistency and simplicity
+- 🧱 Refactored internal config resolution to cleanly handle default and specific versions
+
+### Fixed
+- ❌ Improved error handling when install target directory doesn’t exist or isn't writable
+- 📛 Fixed duplicate version listing when multiple steps share same tool version
+- 📁 Ensured proper cleanup of downloaded archives (e.g. `.tar.gz`) after successful install
 
 ## [1.2.0] - 2025-07-28
 
