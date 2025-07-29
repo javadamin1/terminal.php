@@ -4,10 +4,6 @@ if ( session_status() === PHP_SESSION_NONE ) {
 	session_start();
 }
 
-// For this 'fatal: $HOME not set' error set Home
-#putenv("HOME=/tmp");
-#putenv('COMPOSER_HOME=/home/yourDomainName');
-
 /**
  * Terminal.php - Terminal Emulator for PHP
  *
@@ -51,10 +47,11 @@ if ( !function_exists('shell_exec') ) {
 $config = [
 	'laravelMode'     => false,
 	'cacheFile'       => __DIR__ . '/cache/cache.json',
+	'envFile'         => __DIR__ . '/.terminal_env',
 	'temporaryCache'  => 'cookie', // none,cookie,session
 	'tools'           => [
-		'cache'  => 'month',    // forever,day,week,month
-		'useful' => [ // tools list for search in install tools
+		'cache'        => 'month',    // forever,day,week,month
+		'useful'       => [ // tools list for search in install tools
 			'git',
 			'composer',
 			'php',
@@ -81,7 +78,10 @@ $config = [
 			'telnet',
 			'gzip',
 			'g++'
-		]
+		],
+		'repoPath'     => __DIR__ . '/package.json',
+		'downloadPath' => __DIR__ . '/tools/download',
+		'binPath'      => __DIR__ . '/tools/bin',
 	],
 	'blockedCommands' => [/*'mkdir',
         'rm',
@@ -225,6 +225,10 @@ class Helper {
 		}
 
 		return str_rot13($rotated);
+	}
+
+	public static function fixDir (string $dir) : ?string {
+		return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 	}
 
 
@@ -482,11 +486,16 @@ class Cache {
 
 }
 
+class ToolInstallException extends \Exception {
+}
+
+
 class TerminalPHP {
 
 	/* These commands are not executed */
-	private array $config    = [];
-	private array $helpsArgs = ['-h', '--h', 'help', '--help'];
+	private array $config         = [];
+	private array $helpsArgs      = ['-h', '--h', 'help', '--help'];
+	private array $installContext = [];
 
 	/**
 	 * initialize Class
@@ -498,6 +507,7 @@ class TerminalPHP {
 			$this->config = $config;
 		}
 		$this->_cd($path);
+		$this->putEnv();
 	}
 
 	/**
@@ -579,12 +589,46 @@ class TerminalPHP {
 	 *
 	 * @return string
 	 */
-	private function shell ($cmd) {
+	private function shell (string $cmd) : string {
 		$resp = shell_exec($cmd . ' 2>&1 ');
 
-		return $resp ? trim($resp) : $resp;
+		return !empty($resp) ? trim($resp) : '';
 	}
 
+	private function putEnv () {
+		$originalPath = getenv('PATH');
+		$binPath      = $this->config['tools']['binPath'] ?? '';
+		if ( !empty($binPath) ) {
+			putenv('PATH=' . $binPath . ':' . $originalPath);
+		}
+
+		$envPath = $this->config['envFile'] ?? '';
+		if ( !file_exists($envPath) ) {
+			return;
+		}
+
+		$lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+		foreach ( $lines as $line ) {
+			$line = trim($line);
+			if ( $line === '' || strpos($line, '#') === 0 ) {
+				continue;
+			}
+
+			[$key, $val] = explode('=', $line, 2);
+			$key = trim($key);
+			$val = trim($val);
+			if ( strpos($val, '~/') === 0 ) {
+				$val = getenv('HOME') . substr($val, 1);
+			}
+
+			if ( !preg_match('~^(/|[A-Z]:)~i', $val) ) {
+				$val = __DIR__ . '/' . $val;
+			}
+			putenv("$key=$val");
+		}
+
+
+	}
 
 	/**
 	 * Run Commands as Class method
@@ -696,9 +740,9 @@ class TerminalPHP {
 		return array_merge(explode("\n", $this->ls('/usr/bin')), get_class_methods('CustomCommands'));
 	}
 
-
 	private function getAvailableCommandsFromCache () : array {
 		if ( $this->config && isset($this->config['tools']) ) {
+
 			$tools           = $this->config['tools'];
 			$toolsCache      = $tools['cache'] ?? 'day';
 			$cache           = Cache::getInstance();
@@ -787,6 +831,172 @@ class TerminalPHP {
 		return array_keys($commands); // Unique command list
 	}
 
+	private function installTool (string $toolName) : string {
+
+		$repoPath = $this->config['tools']['repoPath'] ?? '';
+		if ( !file_exists($repoPath) ) {
+			return "❌ Error: package repository not found.";
+		}
+
+		$packages = json_decode(file_get_contents($repoPath), true);
+
+		if ( !isset($packages[$toolName]) ) {
+			return "❌ Error: tool \"$toolName\" not found in repository.";
+		}
+
+		$tool  = $packages[$toolName];
+		$steps = $tool['install'] ?? [];
+
+		$output = "Installing {$toolName} (v{$tool['version']})...\n";
+
+		try {
+			foreach ( $steps as $step ) {
+				$action = $step['action'] ?? 'unknown';
+				$output .= "> $action \n";
+				$result = $this->executeInstallStep($step);
+				$output .= $result . "\n";
+			}
+		} catch ( ToolInstallException $e ) {
+			$output .= $e->getMessage() . "\n❌ Installation aborted.";
+		} catch ( \Throwable $e ) {
+			$output .= "❌ Unexpected error: " . $e->getMessage() . "\n❌ Installation aborted.";
+		}
+
+		return $output;
+	}
+
+	/**
+	 * @throws \ToolInstallException
+	 */
+	private function executeInstallStep (array $step) : string {
+		$action = $step['action'] ?? 'unknown';
+
+		if ( $action === 'download' ) {
+			$url  = $step['url'];
+			$key  = $step['key'] ?? 'downloaded_file';
+			$data = @file_get_contents($url);
+			if ( !$data ) {
+				throw new ToolInstallException("❌ Failed to download $url");
+			}
+
+			$to = $this->config['tools']['downloadPath'] ?? '/tools';
+			if ( !is_dir($to) ) {
+				mkdir($to, 0755, true);
+			}
+
+			$filename = basename(parse_url($url, PHP_URL_PATH));
+			$filePath = rtrim($to, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+
+			file_put_contents($filePath, $data);
+			$this->installContext[$key] = $filePath;
+
+			return "✅ Downloaded to $filePath";
+		}
+
+		if ( $action === 'shell' ) {
+			$cmd    = $this->replacePlaceholders($step['cmd']);
+			$result = $this->shell($cmd);
+
+			return "✅ Ran shell: $cmd\n" . trim($result);
+		}
+
+		if ( $action === 'symlink' ) {
+			$src  = $this->replacePlaceholders($step['target']);
+			$link = $this->replacePlaceholders($step['link']);
+
+			if ( !$link || !$src || !file_exists($src) ) {
+				throw new ToolInstallException("❌ Symlink error: missing source or link");
+			}
+			$bin  = $this->config['tools']['binPath'];
+			$dest = Helper::fixDir($bin) . basename($link);
+			@unlink($dest);
+			symlink($src, $dest);
+			chmod($dest, 0755);
+
+			return "✅ Symlink created: $dest → $src";
+		}
+		if ( $action === 'mv' ) {
+			$src = $this->replacePlaceholders($step['target']);
+			if ( !file_exists($src) ) {
+				throw new ToolInstallException("❌ Source file not found for mv: $src");
+			}
+			$path = $this->replacePlaceholders($step['path']);
+			if ( !$path ) {
+				throw new ToolInstallException("❌ mv error: path not defined");
+			}
+
+			$bin = $this->config['tools']['binPath'];
+			if ( !is_dir($bin) ) {
+				mkdir($bin, 0755, true);
+			}
+			$filename = basename($src);
+			$dest     = Helper::fixDir($bin) . $filename;
+			rename($src, $dest);
+			$key                        = $step['key'] ?? 'movePath';
+			$this->installContext[$key] = $dest;
+
+			return "✅ move file: $src → $dest";
+		}
+
+		throw new ToolInstallException("❓ Unknown action: $action");
+	}
+
+
+	private function replacePlaceholders (string $str) : string {
+		foreach ( $this->installContext as $key => $value ) {
+			$str = str_replace('{' . $key . '}', $value, $str);
+		}
+
+		return $str;
+	}
+
+
+
+
+
+	/************************************************************/
+	/*                      Local Commands                      */
+	/*                                                          */
+	/*             note: command must start with '_'            */
+	/************************************************************/
+
+	/**
+	 * Change Directory Command
+	 *
+	 * @param $path string patch to change
+	 *
+	 * @return void
+	 */
+	private function _cd ($path) {
+		if ( $path ) {
+			chdir($path);
+		}
+
+	}
+
+	/**
+	 * Current Working Directory Command
+	 *
+	 * @return string
+	 */
+	private function _pwd () {
+		return getcwd();
+	}
+
+	/**
+	 * Ping Command
+	 *
+	 * @return string
+	 */
+	private function _ping ($a) {
+
+		if ( strpos($a, '-c ') !== false ) {
+			return $this->shell('ping ' . $a);
+		}
+
+		return $this->shell('ping -c 4 ' . $a);
+	}
+
 	public function _tools ($arg) : string {
 
 		$arg     = trim($arg);
@@ -835,54 +1045,13 @@ class TerminalPHP {
 				return $this->searchAllCommands($searchTerm);
 			}
 		}
+		if ( $cmd === 'install' ) {
+			return $this->installTool($arg);
+		}
 
 		return 'terminal.php: Not found commend';
 	}
 
-
-
-	/************************************************************/
-	/*                      Local Commands                      */
-	/*                                                          */
-	/*             note: command must start with '_'            */
-	/************************************************************/
-
-	/**
-	 * Change Directory Command
-	 *
-	 * @param $path string patch to change
-	 *
-	 * @return void
-	 */
-	private function _cd ($path) {
-		if ( $path ) {
-			chdir($path);
-		}
-
-	}
-
-	/**
-	 * Current Working Directory Command
-	 *
-	 * @return string
-	 */
-	private function _pwd () {
-		return getcwd();
-	}
-
-	/**
-	 * Ping Command
-	 *
-	 * @return string
-	 */
-	private function _ping ($a) {
-
-		if ( strpos($a, '-c ') !== false ) {
-			return $this->shell('ping ' . $a);
-		}
-
-		return $this->shell('ping -c 4 ' . $a);
-	}
 
 }
 
@@ -895,6 +1064,7 @@ if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
 	$arguments = array_slice(explode(' ', $_REQUEST['command']), 1);
 	$path      = isset($_REQUEST['path']) ? $_REQUEST['path'] : '';
 	$terminal  = new TerminalPHP($path, $config ?? []);
+	$result    = '';
 	if ( KEY === 'YourRandomSecureKey' && isset($config['debugMode']) && $config['debugMode'] === false ) {
 		$resp = json_encode([
 			'result' => 'Terminal access denied. You are using the default KEY. Please edit terminal.php and set a secure, custom KEY to enable access.',
@@ -906,8 +1076,9 @@ if ( !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
 		$result = CustomCommands::$command($arguments);
 	} else {
 		$command = $terminal->runCommand($_REQUEST['command']);
-		$result  = $terminal->normalizeHtml($command);
-
+		if ( is_string($command) ) {
+			$result = $terminal->normalizeHtml($command);
+		}
 	}
 	$resp = json_encode([
 		'result' => $result,

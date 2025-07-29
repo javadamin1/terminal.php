@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+
+## [1.1.0] - 2025-07-28
+
+### Added
+- 🔧 Introduced `tools install <tool>` command to install tools like `composer`, `nvm`, etc.
+- 🧰 Installer supports JSON-based tool definitions with multiple actions: `download`, `shell`, `mv`, `symlink`
+- 🔄 Placeholder context system (`{downloaded_file}`, `{move_file}`) for chaining install steps
+- 📁 Configurable install paths: `tools/bin`, `tools/download` via `.env` file or config
+- 🌐 `.terminal_env` support added to define environment variables like `HOME`, `COMPOSER_HOME`, `PATH`
+- 📦 Prepared for future support of online JSON repositories for installable tools
+
+### Changed
+- Improved `README.md` with `📦 Tools Installer` usage section
+- Refactored `executeInstallStep()` logic to support dynamic installation pipelines
+- Enhanced `tools` command to recognize new subcommand `install`
+
+### Fixed
+- `$PATH` and `$HOME` environment visibility issue in non-interactive shells
+- Proper symlink handling with fallback and cleanup
+
 ---
 ## [1.0.1] - 2025-05-29
 

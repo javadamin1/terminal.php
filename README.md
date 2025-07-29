@@ -20,6 +20,78 @@ A lightweight and customizable PHP-based terminal emulator that lets you run she
 - Compatible with Laravel (CSRF/auth supported)
 - Clean HTML output formatting
 - Tools discovery & caching (with filtering/search)
+- 🔧 Install developer tools like `composer`, `node` via `tools install`
+
+---
+
+## 📦 Tools Installer
+
+You can install and manage developer tools directly from the terminal UI using the built-in `tools install` command.
+
+### ▶️ Example Usage
+
+```bash
+tools install composer
+```
+
+This will:
+
+1. Download the tool from the official source or from your own **online JSON-based package repository** (coming soon)
+2. Make it executable
+3. Move it to a proper binary directory (e.g., `tools/bin`)
+4. Create a symlink for easy execution (`composer` will be available globally within the terminal)
+
+> ℹ️ Tools are defined inside a remote or local JSON-based repository, and you can easily extend it.
+
+### 🛠 Sample tool definition
+
+Here’s a sample `composer` install script as used internally:
+
+```json
+{
+  "composer": {
+    "version": "2.7.0",
+    "install": [
+      {
+        "action": "download",
+        "url": "https://getcomposer.org/download/latest-stable/composer.phar",
+        "key": "downloaded_file"
+      },
+      {
+        "action": "shell",
+        "cmd": "chmod +x {downloaded_file}"
+      },
+      {
+        "action": "mv",
+        "target": "{downloaded_file}",
+        "path": "composer/{downloaded_file}",
+        "key": "move_file"
+      },
+      {
+        "action": "symlink",
+        "target": "{move_file}",
+        "link": "composer"
+      }
+    ]
+  }
+}
+```
+
+---
+
+You can also create your own custom repository and add tools like `nvm`, `php-cs-fixer`, `wp-cli`, etc.
+
+```bash
+tools install nvm
+tools install wp-cli
+```
+
+The terminal will parse the JSON, execute installation steps safely, and make tools globally usable inside your web terminal.
+
+### 🌐 Future Support: Remote Tool Repository
+
+In future releases, tools will be fetched dynamically from an online repository like:
+
 
 ---
 
@@ -54,14 +126,22 @@ If you encounter the error:
 fatal: $HOME not set
 ```
 
-Set the environment variables at the top of the script:
+You don't need to modify the script directly.
 
-```php
-putenv("HOME=/tmp");
-putenv("COMPOSER_HOME=/home/yourDomainName");
-```
+Instead, create a file named `.terminal_env` in your project root (or home directory):
 
-Replace `/home/yourDomainName` with the correct home directory for your hosting environment.
+<pre><code class="language-bash">
+# ~/.terminal_env
+HOME=tools/home
+COMPOSER_HOME=tools/home/.composer
+</code></pre>
+
+This file allows you to define environment variables like `HOME`, `COMPOSER_HOME`, etc.
+
+These values will be automatically loaded and injected into the terminal environment using `putenv()`.
+
+> ℹ️ **Default location:**  
+> `terminal.php` will look for `.terminal_env` next to the script itself.
 
 ---
 

@@ -1,0 +1,5 @@
+# ~/.terminal_env
+
+# For this 'fatal: $HOME not set' error uncomment and set Home variable
+#HOME=tools/home
+#COMPOSER_HOME=tools/home/.composer
