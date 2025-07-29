@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [1.1.0] - 2025-07-28
+## [1.2.0] - 2025-07-28
 
 ### Added
 - 🔧 Introduced `tools install <tool>` command to install tools like `composer`, `nvm`, etc.
@@ -26,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `$PATH` and `$HOME` environment visibility issue in non-interactive shells
 - Proper symlink handling with fallback and cleanup
 
+---
+## [1.1.0] - 2025-06-12
+
+🎉 **First stable release with important improvements**
+
+### 🔍 New Features
+- ✅ Added update checker (configurable via `'checkUpdate'` in config)
+- 📦 Smart and manageable caching system (supports `'cookie'`, `'session'`)
+
+### ⚠️ Changes
+- ❌ Removed wildcard command execution due to conflicts
+- 🔒 Improved security defaults and directory structure
+
+### 📚 Also includes
+- Clean and structured `README.md` with clearer instructions
 ---
 ## [1.0.1] - 2025-05-29
 
