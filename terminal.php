@@ -106,11 +106,11 @@ class CustomCommands {
 	 *    note 2: $a is array of arguments                         *
 	 * *************************************************************/
 
-	public static function hi ($a) {
+	public static function hi ($a) : string {
 		return 'Hi ' . implode(' ', $a);
 	}
 
-	public static function md5 ($a) {
+	public static function md5 ($a) : string {
 		$input = implode(' ', $a);
 		if ( $input ) {
 			return md5($input);
@@ -119,9 +119,20 @@ class CustomCommands {
 		}
 	}
 
-	public static function developer () {
-		return 'SmartWF<br><a href="https://github.com/smartwf" target="_blank">github</a> &nbsp; &nbsp; <a href="mailto:hi@smartwf.ir" target="_blank">mail</a> &nbsp; &nbsp; <a href="http://twitter.com/smartwf" target="_blank">twitter</a>';
+	public static function developer () : string {
+		return 'SmartWF<br>
+                        <a href="https://github.com/smartwf" target="_blank">github (original)</a> &nbsp; &nbsp;
+                        <a href="mailto:hi@smartwf.ir" target="_blank">mail (original)</a> &nbsp; &nbsp;
+                        <a href="http://twitter.com/smartwf" target="_blank">twitter (original)</a>
+                        <br><br>
+                        Forked and maintained by <strong>Javad Fathi</strong><br>
+                        <a href="https://github.com/javadamin1" target="_blank">github</a> &nbsp; &nbsp;
+                        <a href="mailto:javadamin93@gmail.com" target="_blank">mail</a>
+                        <a href="https:linkedin.com/in/javadfathi" target="_blank">Linkedin</a>
+                        <a href="https:javadfathi.ir" target="_blank">Web Site</a>';
 	}
+
+
 }
 
 class Helper {
@@ -229,6 +240,67 @@ class Helper {
 
 	public static function fixDir (string $dir) : ?string {
 		return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+	}
+
+	/**
+	 *  find os
+	 *
+	 * @return string
+	 */
+	public static function detectOS () : string {
+		if ( PHP_OS_FAMILY === 'Windows' ) {
+			return 'windows';
+		}
+
+		if ( file_exists('/etc/alpine-release') ) {
+			return 'alpine';
+		}
+
+		if ( file_exists('/etc/centos-release') ) {
+			return 'centos';
+		}
+
+		if ( file_exists('/etc/os-release') ) {
+			$release = file_get_contents('/etc/os-release');
+
+			if ( stripos($release, 'rocky') !== false ) {
+				return 'rocky';
+			}
+
+			if ( stripos($release, 'almalinux') !== false ) {
+				return 'alma';
+			}
+
+			if ( stripos($release, 'ubuntu') !== false ) {
+				return 'ubuntu';
+			}
+
+			if ( stripos($release, 'debian') !== false ) {
+				return 'debian';
+			}
+
+			if ( stripos($release, 'fedora') !== false ) {
+				return 'fedora';
+			}
+
+			if ( stripos($release, 'arch') !== false ) {
+				return 'arch';
+			}
+		}
+
+		return strtolower(PHP_OS); // fallback: linux, darwin, etc.
+	}
+
+	/**
+	 * @param string $dir
+	 *
+	 * @return void
+	 * @throws RuntimeException
+	 */
+	public static function mkdir (string $dir) : void {
+		if ( !is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir) ) {
+			throw new RuntimeException("❌ Extract error: Failed to create destination directory: " . htmlspecialchars($dir));
+		}
 	}
 
 
@@ -597,7 +669,7 @@ class TerminalPHP {
 		return !empty($resp) ? trim($resp) : '';
 	}
 
-	private function putEnv () {
+	private function putEnv () : void {
 		$originalPath = getenv('PATH');
 		$binPath      = $this->config['tools']['binPath'] ?? '';
 		if ( !empty($binPath) ) {
@@ -628,8 +700,6 @@ class TerminalPHP {
 			}
 			putenv("$key=$val");
 		}
-
-
 	}
 
 	/**
@@ -640,7 +710,7 @@ class TerminalPHP {
 	 *
 	 * @return string
 	 */
-	public function __call ($cmd, $arg) {
+	public function __call (string $cmd, array $arg) {
 		return $this->runCommand($cmd . (isset($arg[0]) ? ' ' . $arg[0] : ''));
 	}
 
@@ -659,17 +729,20 @@ class TerminalPHP {
 		$arg = count($args) > 0 ? implode(' ', $args) : '';
 		// create local commend name
 		$localCmd = '_' . $cmd;
-		if ( in_array($localCmd, $this->getLocalCommands()) ) {
+		if ( method_exists($this, $localCmd) ) {
 			return $this->$localCmd($arg);
-		} else if ( $this->isCommandBlocked($cmd) ) {
+		}
+		if ( $this->isCommandBlocked($cmd) ) {
 			return 'terminal.php: Permission denied';
-		} else if ( $this->isCommandAvailable($cmd) ) {
+		}
+
+		if ( $this->isCommandAvailable($cmd) ) {
 			$fullCmd = $cmd . ' ' . $arg;
 
 			return $this->shell($fullCmd);
-		} else {
-			return 'terminal.php: command not found: ' . $cmd;
 		}
+
+		return 'terminal.php: command not found: ' . $cmd;
 	}
 
 	/**
@@ -700,7 +773,7 @@ class TerminalPHP {
 	 * @return array
 	 */
 	private function getLocalCommands () : array {
-		return array_filter(get_class_methods($this), function ($methodName) {
+		return array_filter(get_class_methods($this), static function ($methodName) {
 			return strpos($methodName, '_') === 0 && strpos($methodName, '__') !== 0;
 		});
 	}
@@ -899,12 +972,14 @@ class TerminalPHP {
 
 	/**
 	 * @throws \ToolInstallException
+	 * @throws \Exception
 	 */
 	private function executeInstallStep (array $step) : string {
 		$action = $step['action'] ?? 'unknown';
 
 		if ( $action === 'download' ) {
 			$url  = $step['url'];
+			$url  = $this->replacePlaceholders($url);
 			$key  = $step['key'] ?? 'downloaded_file';
 			$data = @file_get_contents($url);
 			if ( !$data ) {
@@ -920,6 +995,7 @@ class TerminalPHP {
 			$filePath = rtrim($to, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
 
 			file_put_contents($filePath, $data);
+
 			if ( !file_exists($filePath) ) {
 				throw new ToolInstallException("❌ Failed to download $url");
 			}
@@ -938,78 +1014,28 @@ class TerminalPHP {
 			if ( is_file($target) ) {
 				if ( @unlink($target) ) {
 					return "Deleted file: $target";
-				} else {
-					return "Failed to delete file: $target";
 				}
-			} elseif ( is_dir($target) ) {
+
+				return "Failed to delete file: $target";
+			}
+
+			if ( is_dir($target) ) {
 				$this->shell("rm -rf " . escapeshellarg($target));
 
 				return file_exists($target) ? "Failed to delete directory: $target" : "Deleted directory: $target";
-			} else {
-				return "Unknown target type: $target";
 			}
+
+			return "Unknown target type: $target";
 		}
 
 		if ( $action === 'extract' ) {
-			$file = $this->replacePlaceholders($step['file'] ?? '');
-			$dest = $this->replacePlaceholders($step['path'] ?? '');
-			$dest = Helper::fixDir($this->config['tools']['binPath'] ?? '') . ltrim($dest, '/');
-			$key  = $step['key'] ?? null;
+			$file     = $this->replacePlaceholders($step['file'] ?? '');
+			$dest     = $this->replacePlaceholders($step['path'] ?? '');
+			$dest     = Helper::fixDir($this->config['tools']['binPath'] ?? '') . ltrim($dest, '/');
+			$key      = $step['key'] ?? '';
+			$excludes = $step['excludes'] ?? [];
 
-			if ( !$file || !file_exists($file) ) {
-				return "❌ Extract error: File not found or not specified: " . htmlspecialchars($file);
-			}
-
-			if ( !is_dir($dest) && !mkdir($dest, 0755, true) && !is_dir($dest) ) {
-				return "❌ Extract error: Failed to create destination directory: " . htmlspecialchars($dest);
-			}
-
-			$ext = strtolower($file);
-			if ( substr($ext, -4) === '.zip' ) {
-				if ( !class_exists('ZipArchive') ) {
-					return "❌ Extract error: PHP ZipArchive not available.";
-				}
-
-				$zip = new ZipArchive();
-				$res = $zip->open($file);
-				if ( $res === true ) {
-					if ( !$zip->extractTo($dest) ) {
-						return "❌ Extract error: Failed to extract ZIP to: " . htmlspecialchars($dest);
-					}
-					$zip->close();
-				} else {
-					return "❌ Extract error: Cannot open ZIP file. Error code: $res";
-				}
-			} elseif ( preg_match('/\.tar\.gz$|\.tgz$/', $ext) ) {
-				$cmd    = "tar -xzf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
-				$output = $this->shell($cmd);
-				if ( !is_dir($dest) || !scandir($dest) ) {
-					return "❌ Extract error: Failed to extract .tar.gz file.\nOutput:\n$output";
-				}
-
-			} elseif ( preg_match('/\.tar\.xz$/', $ext) ) {
-				$cmd    = "tar -xJf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
-				$output = $this->shell($cmd);
-				if ( !is_dir($dest) || !scandir($dest) ) {
-					return "❌ Extract error: Failed to extract .tar.xz file.\nOutput:\n$output";
-				}
-
-			} elseif ( preg_match('/\.tar$/', $ext) ) {
-				$cmd    = "tar -xf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
-				$output = $this->shell($cmd);
-				if ( !is_dir($dest) || !scandir($dest) ) {
-					return "❌ Extract error: Failed to extract .tar file.\nOutput:\n$output";
-				}
-
-			} else {
-				return "❌ Extract error: Unsupported file type: " . htmlspecialchars($ext);
-			}
-
-			if ( $key ) {
-				$this->installContext[$key] = $dest;
-			}
-
-			return "✅ Extracted successfully to: " . htmlspecialchars($dest);
+			return $this->extract($file, $dest, $key, $excludes);
 		}
 
 		if ( $action === 'shell' ) {
@@ -1024,13 +1050,16 @@ class TerminalPHP {
 			$link = $this->replacePlaceholders($step['link']);
 
 			if ( !$link || !$src || !file_exists($src) ) {
-				throw new ToolInstallException("❌ Symlink error: missing source or link");
+				throw new ToolInstallException("❌ Symlink error: missing source or link : target => $src ,link => $link");
 			}
 			$bin  = $this->config['tools']['binPath'];
 			$dest = Helper::fixDir($bin) . basename($link);
 			@unlink($dest);
-			symlink($src, $dest);
-			chmod($dest, 0755);
+			$result = @symlink($src, $dest);
+			if ( $result === false ) {
+				throw new ToolInstallException("❌ Symlink error: can't link   $src to $link");
+			}
+			@chmod($dest, 0755);
 
 			return "✅ Symlink created: $dest → $src";
 		}
@@ -1045,9 +1074,8 @@ class TerminalPHP {
 			}
 
 			$bin = $this->config['tools']['binPath'];
-			if ( !is_dir($bin) ) {
-				mkdir($bin, 0755, true);
-			}
+            Helper::mkdir($bin);
+
 			$filename = basename($src);
 			$dest     = Helper::fixDir($bin) . $filename;
 			rename($src, $dest);
@@ -1056,8 +1084,181 @@ class TerminalPHP {
 
 			return "✅ move file: $src → $dest";
 		}
+		if ( $action === 'run' ) {
+
+			$fn      = $this->replacePlaceholders($step['fn']);
+			$value   = $this->replacePlaceholders($step['value'] ?? '');
+			$localFn = '_' . $fn;
+			$key     = $step['key'] ?? 'functionData';
+			if ( method_exists($this, $fn) ) {
+				throw new ToolInstallException("❌ Function  not found in terminal: $fn");
+			}
+
+			try {
+				$result                     = $this->{$localFn}($value);
+				$this->installContext[$key] = $result;
+
+				return "✅ run $fn successfully ";
+
+			} catch ( Throwable $e ) {
+				throw new ToolInstallException("❌ Function get exception: $fn");
+			}
+		}
+		if ( $action === 'sync' ) {
+			$zipPath  = $this->replacePlaceholders($step['file'] ?? '');
+			$target   = $this->replacePlaceholders($step['target'] ?? '');
+			$excludes = $step['excludes'] ?? [];
+
+			$key = $step['key'] ?? '';
+
+			$this->syncZip($zipPath, $target, $key, $excludes);
+		}
 
 		throw new ToolInstallException("❓ Unknown action: $action");
+	}
+
+	/**
+	 * @param        $file
+	 * @param        $dest
+	 * @param string $key
+	 * @param array  $exclude
+	 *
+	 * @return string
+	 * @throws \RuntimeException|\ToolInstallException
+	 */
+	public function extract ($file, $dest, string $key = '', array $exclude = []) : string {
+
+		if ( !$file || !file_exists($file) ) {
+			throw new  ToolInstallException("❌ Extract error: File not found or not specified: " . htmlspecialchars($file));
+		}
+
+		Helper::mkdir($dest);
+
+		$ext = strtolower($file);
+		if ( substr($ext, -4) === '.zip' ) {
+			if ( !class_exists('ZipArchive') && !$this->shell('command -v unzip') ) {
+				throw new ToolInstallException("⛔ Neither ZipArchive nor shell unzip is available.");
+			}
+
+			if ( !class_exists('ZipArchive') ) {
+				$cmd  = sprintf('unzip -q %s -d %s', escapeshellarg($file), escapeshellarg($dest));
+				$resp = $this->shell($cmd);
+				if ( !$resp ) {
+					throw new ToolInstallException("❌ Extract error: PHP ZipArchive not available and failed to extract zip using shell command.");
+				}
+
+				return '✅ Extracted successfully to: ' . $resp;
+			}
+
+			$zip = new ZipArchive();
+			$res = $zip->open($file);
+			if ( $res === true ) {
+				if ( !$zip->extractTo($dest) ) {
+					throw new ToolInstallException("❌ Extract error: Failed to extract ZIP to: " . htmlspecialchars($dest));
+				}
+				$zip->close();
+			} else {
+				throw new ToolInstallException("❌ Extract error: Cannot open ZIP file. Error code: $res");
+			}
+
+		} elseif ( preg_match('/\.tar\.gz$|\.tgz$/', $ext) ) {
+			$cmd    = "tar -xzf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
+			$output = $this->shell($cmd);
+			if ( !is_dir($dest) || !scandir($dest) ) {
+				throw new ToolInstallException("❌ Extract error: Failed to extract .tar.gz file.\nOutput:\n$output");
+			}
+
+		} elseif ( preg_match('/\.tar\.xz$/', $ext) ) {
+			$cmd    = "tar -xJf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
+			$output = $this->shell($cmd);
+			if ( !is_dir($dest) || !scandir($dest) ) {
+				return "❌ Extract error: Failed to extract .tar.xz file.\nOutput:\n$output";
+			}
+
+		} elseif ( preg_match('/\.tar$/', $ext) ) {
+			$cmd    = "tar -xf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
+			$output = $this->shell($cmd);
+			if ( !is_dir($dest) || !scandir($dest) ) {
+				throw new ToolInstallException("❌ Extract error: Failed to extract .tar file.\nOutput:\n$output");
+			}
+
+		} else {
+			throw new ToolInstallException("❌ Extract error: Unsupported file type: " . htmlspecialchars($ext));
+		}
+
+		if ( $key ) {
+			$this->installContext[$key] = $dest;
+		}
+
+		return "✅ Extracted successfully to: " . htmlspecialchars($dest);
+	}
+
+	/**
+	 * @throws \ToolInstallException
+	 */
+	public function syncZip ($zipPath, $targetDir, $key = '', $excludes = []) : void {
+		$tmp = sys_get_temp_dir() . '/terminal_upgrade_' . uniqid('', true);
+		Helper::mkdir($tmp);
+		$key  = $key ?: 'syncExtract';
+		$html = $this->extract($zipPath, $targetDir, $key, $excludes);
+
+
+		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tmp, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+		Helper::dd($html, $tmp, $iterator);
+		foreach ( $iterator as $item ) {
+			$relPath  = substr($item->getPathname(), strlen($tmp) + 1);
+			$destPath = $targetDir . '/' . $relPath;
+
+			$isExcluded = false;
+			foreach ( $excludes as $ex ) {
+				if ( strpos($relPath, $ex) === 0 ) {
+					$isExcluded = true;
+					break;
+				}
+			}
+			if ( $isExcluded ) {
+				continue;
+			}
+
+			if ( $item->isDir() ) {
+				if ( !is_dir($destPath) ) {
+					mkdir($destPath, 0755, true);
+				}
+			} else {
+				copy($item->getPathname(), $destPath);
+			}
+		}
+
+		// حذف فایل‌های قدیمی که در نسخه جدید نیستند
+		$existingFiles = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($targetDir, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+
+		foreach ( $existingFiles as $item ) {
+			$relPath = substr($item->getPathname(), strlen($targetDir) + 1);
+			$newPath = $tmp . '/' . $relPath;
+
+			$isExcluded = false;
+			foreach ( $excludes as $ex ) {
+				if ( strpos($relPath, $ex) === 0 ) {
+					$isExcluded = true;
+					break;
+				}
+			}
+			if ( $isExcluded ) {
+				continue;
+			}
+
+			if ( !file_exists($newPath) ) {
+				if ( $item->isDir() ) {
+					@rmdir($item->getPathname());
+				} else {
+					@unlink($item->getPathname());
+				}
+			}
+		}
+
+		// پاکسازی
+		@unlink($zipPath);
+		shell_exec('rm -rf ' . escapeshellarg($tmp));
 	}
 
 
@@ -1069,6 +1270,52 @@ class TerminalPHP {
 		return $str;
 	}
 
+	protected function upgradeSelf () : string {
+		$updateInfo = $this->checkUpdate();
+		if ( !$updateInfo ) {
+			return "Your terminal is already up-to-date.";
+		}
+
+		$url = $updateInfo['changelog'] ?? null;
+		if ( !$url ) {
+			return "Update URL not found.";
+		}
+
+		$downloadUrl = str_replace('/tag/', '/download/', $url) . '/terminal.phar';
+		$html        = "Downloading version {$updateInfo['version']}..." . PHP_EOL;
+
+		$file = file_get_contents($downloadUrl);
+		if ( !$file ) {
+			$html .= "Failed to download the new version.";
+
+			return $html;
+		}
+
+		file_put_contents(__FILE__, $file);
+
+		return "Updated to version {$updateInfo['version']}. Please restart.";
+	}
+
+	public function upgradeTool (string $args, string $threeWord) : string {
+
+		if ( empty($args) ) {
+			return "No tool specified. Use `tools upgrade self` or `tools upgrade <tool>`.";
+		}
+
+		if ( $args === 'self' ) {
+            if (empty($threeWord) || $threeWord !== '-y') {
+	            return "⚠️ Upgrading 'self' will sync the terminal directory, remove unused files, and add new files. If you have custom files, the upgrade may overwrite them. Cancel the upgrade or confirm by adding '-y'. ⚠️";
+            }
+			return $this->installTool('self');
+		}
+
+		Helper::dd('not Self', $args);
+		$toolParts = explode('@', $args[0]);
+		$tool      = $toolParts[0];
+		$version   = $toolParts[1] ?? null;
+
+		return $this->upgradeTool($tool, $version);
+	}
 
 
 
@@ -1199,7 +1446,7 @@ class TerminalPHP {
 						$versions[] = $defaultVersion;
 					}
 
-					$resp .= 'Package "' . $value . '" found. available versions: [' . implode(',', $versions) . '] ';
+					$resp .= 'Package "' . $value . '" found. available versions: [' . implode(', ', $versions) . ' ] ' . PHP_EOL . '  ';
 				}
 
 				return $resp;
@@ -1212,8 +1459,18 @@ class TerminalPHP {
 		if ( $cmd === 'install' ) {
 			return $this->installTool($arg);
 		}
+		if ( $cmd === 'upgrade' ) {
+			return $this->upgradeTool($arg, $threeWord);
+		}
 
 		return 'terminal.php: Not found commend';
+	}
+
+	/**
+	 * @return string host os name
+	 */
+	public static function _os () : string {
+		return Helper::detectOS();
 	}
 
 
@@ -1258,10 +1515,11 @@ $terminal = new TerminalPHP('', $config ?? []);
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
+    <link rel="icon" type="image/x-icon" href="./favicon.png">
     <meta charset="utf-8">
     <title>Terminal.php</title>
-    <link href="https://cdn.rawgit.com/rastikerdar/vazir-code-font/v1.1.2/dist/font-face.css" rel="stylesheet"
-          type="text/css"/>
+
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css"/>
 	<?php
 	if ( $laravelMode ) {
 		?>
@@ -1273,8 +1531,8 @@ $terminal = new TerminalPHP('', $config ?? []);
     <style>
         :root {
             --background-url: url('http://files.javadfathi.ir/terminal-background.jpeg');
-            --font: 'Vazir Code', 'Vazir Code Hack';
-            --font-size: 16px;
+            --font: Vazirmatn, sans-serif;
+            --font-size: 14px;
             --primary-color: #101010;
             --color-scheme-1: #55c2f9;
             --color-scheme-2: #ff5c57;
@@ -1439,10 +1697,14 @@ $terminal = new TerminalPHP('', $config ?? []);
             overflow-y: auto;
             color: #ececec;
             font-size: var(--font-size);
+            box-sizing: border-box;
         }
 
         terminal .content line {
             display: block;
+            width: 98% !important;
+            overflow-wrap: break-word;
+            white-space: normal;
         }
 
         terminal .content path {

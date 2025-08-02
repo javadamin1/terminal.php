@@ -1,3 +1,5 @@
 .idea
 cache
 tools
+.DS_Store
+.env

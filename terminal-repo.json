@@ -1,7 +1,36 @@
 {
+  "self": {
+    "description": "this is self package mean terminal",
+    "default": {
+      "version": "1.3.0",
+      "terminal_min_version": "1.3.0",
+      "install": [
+        {
+          "action": "download",
+          "url": "https://github.com/javadamin1/terminal.php/archive/refs/tags/v1.3.0.zip",
+          "key": "self_zip"
+        },
+        {
+          "action": "sync",
+          "file": "{self_zip}",
+          "target": ".",
+          "exclude": [
+            "tools/",
+            ".env",
+            ".terminal_env",
+            "cache/",
+            "terminal-repo.json"
+          ]
+        }
+      ],
+      "uninstall": []
+    }
+  },
   "composer": {
-    "default" : {
+    "description": " This tool is used to install PHP packages",
+    "default": {
       "version": "2.7.0",
+      "terminal_min_version": "1.3.0",
       "install": [
         {
           "action": "download",
@@ -23,9 +52,10 @@
           "target": "{move_file}",
           "link": "composer"
         }
-      ]
+      ],
+      "uninstall": []
     },
-    "2.7.0" : {
+    "2.7.0": {
       "version": "2.7.0",
       "install": [
         {
@@ -52,8 +82,8 @@
     }
   },
   "node": {
-    "default" : {
-      "version" : "22.17.1",
+    "default": {
+      "version": "22.17.1",
       "install": [
         {
           "action": "download",
@@ -63,8 +93,8 @@
         {
           "action": "extract",
           "file": "{node_tar}",
-          "path" : ".node",
-          "key" : "node_path"
+          "path": ".node",
+          "key": "node_path"
         },
         {
           "action": "symlink",
@@ -82,8 +112,8 @@
         }
       ]
     },
-    "20.10.0" : {
-      "version" : "20.10.0",
+    "20.10.0": {
+      "version": "20.10.0",
       "install": [
         {
           "action": "download",
@@ -93,8 +123,8 @@
         {
           "action": "extract",
           "file": "{node_tar}",
-          "path" : ".node",
-          "key" : "node_path"
+          "path": ".node",
+          "key": "node_path"
         },
         {
           "action": "symlink",
@@ -115,11 +145,17 @@
   },
   "git": {
     "default": {
-      "version": "2.9.5",
+      "version": "2.44.0",
       "install": [
         {
+          "action": "run",
+          "fn": "os",
+          "value": "helo",
+          "key": "os_name"
+        },
+        {
           "action": "download",
-          "url": "https://www.kernel.org/pub/software/scm/git/git-2.9.5.tar.xz",
+          "url": "http://127.0.0.1/git-2.44.0-{os_name}.tar.gz",
           "key": "git_tar"
         },
         {
@@ -130,7 +166,7 @@
         },
         {
           "action": "symlink",
-          "target": "{git_path}/git-2.9.5/bin/git",
+          "target": "{git_path}/git/bin/git",
           "link": "git"
         },
         {
@@ -139,7 +175,6 @@
         }
       ]
     },
-
     "2.44.0": {
       "version": "2.44.0",
       "install": [
