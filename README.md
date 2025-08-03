@@ -26,7 +26,8 @@ A lightweight and customizable PHP-based terminal emulator that lets you run she
 
 ## 📦 Tools Installer
 
-You can install and manage developer tools directly from the terminal UI using the built-in `tools install` command.
+> ⚙️ You can also upgrade the terminal or installed tools using the `tools upgrade` command. Type `tools help` for more info.
+
 
 ### ▶️ Example Usage
 

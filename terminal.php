@@ -12,7 +12,7 @@ if ( session_status() === PHP_SESSION_NONE ) {
  */
 
 /* Choose a random key Like ('YourRandomSecureKey') for Security */
-const VERSION = '1.1.0';
+const VERSION = '1.4.0';
 const KEY     = 'YourRandomSecureKey';
 
 if ( KEY !== '' ) {
@@ -303,6 +303,32 @@ class Helper {
 		}
 	}
 
+	public static function getInstalledToolVersion (string $tool) : ?string {
+		$versionCmds = [
+			'composer' => 'composer --version',
+			'node'     => 'node --version',
+			'git'      => 'git --version',
+		];
+
+		if ( !isset($versionCmds[$tool]) ) {
+			return null;
+		}
+
+		$output = TerminalPHP::shell($versionCmds[$tool]);
+		if ( !$output ) {
+			return null;
+		}
+
+		if ( $tool === 'composer' && preg_match('/Composer version (\d+\.\d+\.\d+)/i', $output, $m) ) {
+			return $m[1];
+		}
+
+		if ( ($tool === 'node' || $tool === 'git') && preg_match('/(\d+\.\d+\.\d+)/', $output, $m) ) {
+			return $m[1];
+		}
+
+		return null;
+	}
 
 }
 
@@ -354,10 +380,7 @@ class Cache {
 	 */
 	private function ensureCommandsCacheFile (string $filePath) : string {
 		$dirPath = dirname($filePath);
-
-		if ( !is_dir($dirPath) ) {
-			mkdir($dirPath, 0775, true);
-		}
+        Helper::mkdir($dirPath);
 		if ( !file_exists($filePath) ) {
 			file_put_contents($filePath, json_encode([], JSON_PRETTY_PRINT));
 		}
@@ -663,7 +686,7 @@ class TerminalPHP {
 	 *
 	 * @return string
 	 */
-	private function shell (string $cmd) : string {
+	public static function shell (string $cmd) : string {
 		$resp = shell_exec($cmd . ' 2>&1 ');
 
 		return !empty($resp) ? trim($resp) : '';
@@ -739,7 +762,7 @@ class TerminalPHP {
 		if ( $this->isCommandAvailable($cmd) ) {
 			$fullCmd = $cmd . ' ' . $arg;
 
-			return $this->shell($fullCmd);
+			return self::shell($fullCmd);
 		}
 
 		return 'terminal.php: command not found: ' . $cmd;
@@ -766,18 +789,6 @@ class TerminalPHP {
 		], $input);
 	}
 
-
-	/**
-	 * Array of Local Commands
-	 *
-	 * @return array
-	 */
-	private function getLocalCommands () : array {
-		return array_filter(get_class_methods($this), static function ($methodName) {
-			return strpos($methodName, '_') === 0 && strpos($methodName, '__') !== 0;
-		});
-	}
-
 	/**
 	 * @param $cmd string check commend exist
 	 *
@@ -785,7 +796,7 @@ class TerminalPHP {
 	 */
 	public function isCommandAvailable (string $cmd) : bool {
 		$cmd = escapeshellarg($cmd);
-		if ( $this->shell('command -v ' . $cmd) ) {
+		if ( self::shell('command -v ' . $cmd) ) {
 			return true;
 		}
 		$output = shell_exec("which $cmd 2>/dev/null");
@@ -922,7 +933,7 @@ class TerminalPHP {
 
 	}
 
-	private function installTool (string $toolName) : string {
+	private function installTool (string $toolName, bool $isUpgrade = false) : string {
 		$this->loadPackage();
 		if ( empty($this->packages) ) {
 			return "😢 Package source file not loaded";
@@ -951,6 +962,26 @@ class TerminalPHP {
 		if ( empty($installs) ) {
 			return "🤨 Not found install steps";
 		}
+		$terminal_min_version = $installs['terminal_min_version'] ?? '';
+
+		if ( !empty($terminal_min_version) && defined('VERSION') && version_compare($terminal_min_version, VERSION, '>') ) {
+			return "🙁 You need a terminal version greater than " . $terminal_min_version . ' Your current version is ' . VERSION;
+		}
+		if ( $isUpgrade ) {
+			$upgradeVersion = $installs['version'] ?? '';
+			if ( $toolName === 'self' && defined('VERSION') && version_compare($upgradeVersion, VERSION, '<=') ) {
+				return '❌ Downgrade to an older version or upgrade to the current version is not allowed. ' . PHP_EOL . ' Current version: ' . VERSION . PHP_EOL . ' Target version: ' . $upgradeVersion;
+			}
+
+			if ( $toolName !== 'self' ) {
+				$currentVersion = Helper::getInstalledToolVersion($toolName);
+				if ( !empty($currentVersion) && version_compare($upgradeVersion, $currentVersion, '<=') ) {
+					return '❌ Downgrade to an older version or upgrade to the current version is not allowed. ' . PHP_EOL . ' Current version: ' . $currentVersion . PHP_EOL . ' Target version: ' . $upgradeVersion;
+
+				}
+			}
+		}
+
 		$steps  = $installs['install'];
 		$output = "Installing {$toolName} (v{$installs['version']})...\n";
 
@@ -1020,7 +1051,7 @@ class TerminalPHP {
 			}
 
 			if ( is_dir($target) ) {
-				$this->shell("rm -rf " . escapeshellarg($target));
+				self::shell("rm -rf " . escapeshellarg($target));
 
 				return file_exists($target) ? "Failed to delete directory: $target" : "Deleted directory: $target";
 			}
@@ -1040,7 +1071,7 @@ class TerminalPHP {
 
 		if ( $action === 'shell' ) {
 			$cmd    = $this->replacePlaceholders($step['cmd']);
-			$result = $this->shell($cmd);
+			$result = self::shell($cmd);
 
 			return "✅ Ran shell: $cmd\n >" . trim($result);
 		}
@@ -1137,7 +1168,7 @@ class TerminalPHP {
 
 		$ext = strtolower($file);
 		if ( substr($ext, -4) === '.zip' ) {
-			if ( !class_exists('ZipArchive') && !$this->shell('command -v unzip') ) {
+			if ( !class_exists('ZipArchive') && !self::shell('command -v unzip') ) {
 				throw new ToolInstallException("⛔ Neither ZipArchive nor shell unzip is available.");
 			}
 
@@ -1153,7 +1184,7 @@ class TerminalPHP {
 					$cmd      = sprintf('unzip -q %s -x %s -d %s', escapeshellarg($file), $excluded, escapeshellarg($dest));
 				}
 
-				$resp = $this->shell($cmd);
+				$resp = self::shell($cmd);
 				if ( $resp ) {
 					throw new ToolInstallException("❌ Extract error: PHP ZipArchive not available and failed to extract zip using shell command. Error: " . $resp);
 				}
@@ -1174,21 +1205,21 @@ class TerminalPHP {
 
 		} elseif ( preg_match('/\.tar\.gz$|\.tgz$/', $ext) ) {
 			$cmd    = "tar -xzf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
-			$output = $this->shell($cmd);
+			$output = self::shell($cmd);
 			if ( !is_dir($dest) || !scandir($dest) ) {
 				throw new ToolInstallException("❌ Extract error: Failed to extract .tar.gz file.\nOutput:\n$output");
 			}
 
 		} elseif ( preg_match('/\.tar\.xz$/', $ext) ) {
 			$cmd    = "tar -xJf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
-			$output = $this->shell($cmd);
+			$output = self::shell($cmd);
 			if ( !is_dir($dest) || !scandir($dest) ) {
 				return "❌ Extract error: Failed to extract .tar.xz file.\nOutput:\n$output";
 			}
 
 		} elseif ( preg_match('/\.tar$/', $ext) ) {
 			$cmd    = "tar -xf " . escapeshellarg($file) . " -C " . escapeshellarg($dest) . " 2>&1";
-			$output = $this->shell($cmd);
+			$output = self::shell($cmd);
 			if ( !is_dir($dest) || !scandir($dest) ) {
 				throw new ToolInstallException("❌ Extract error: Failed to extract .tar file.\nOutput:\n$output");
 			}
@@ -1212,7 +1243,7 @@ class TerminalPHP {
 		Helper::mkdir($tmp);
 		$key = $key ?: 'syncExtract';
 
-		$html     = $this->extract($zipPath, $tmp, $key);
+		$html = $this->extract($zipPath, $tmp, $key);
 
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tmp, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
 
@@ -1268,9 +1299,9 @@ class TerminalPHP {
 		}
 
 		@unlink($zipPath);
-		$this->shell('rm -rf ' . escapeshellarg($tmp));
+		self::shell('rm -rf ' . escapeshellarg($tmp));
 
-		return $html."</br> ✏️ Successfully to sync";
+		return $html . "</br> ✏️ Successfully to sync";
 	}
 
 
@@ -1280,32 +1311,6 @@ class TerminalPHP {
 		}
 
 		return $str;
-	}
-
-	protected function upgradeSelf () : string {
-		$updateInfo = $this->checkUpdate();
-		if ( !$updateInfo ) {
-			return "Your terminal is already up-to-date.";
-		}
-
-		$url = $updateInfo['changelog'] ?? null;
-		if ( !$url ) {
-			return "Update URL not found.";
-		}
-
-		$downloadUrl = str_replace('/tag/', '/download/', $url) . '/terminal.phar';
-		$html        = "Downloading version {$updateInfo['version']}..." . PHP_EOL;
-
-		$file = file_get_contents($downloadUrl);
-		if ( !$file ) {
-			$html .= "Failed to download the new version.";
-
-			return $html;
-		}
-
-		file_put_contents(__FILE__, $file);
-
-		return "Updated to version {$updateInfo['version']}. Please restart.";
 	}
 
 	public function upgradeTool (string $args, string $threeWord) : string {
@@ -1319,15 +1324,10 @@ class TerminalPHP {
 				return "⚠️ Upgrading 'self' will sync the terminal directory, remove unused files, and add new files. If you have custom files, the upgrade may overwrite them. Cancel the upgrade or confirm by adding '-y'. ⚠️";
 			}
 
-			return $this->installTool('self');
+			return $this->installTool('self', true);
 		}
 
-		Helper::dd('not Self', $args);
-		$toolParts = explode('@', $args[0]);
-		$tool      = $toolParts[0];
-		$version   = $toolParts[1] ?? null;
-
-		return $this->upgradeTool($tool, $version);
+		return $this->installTool($args, true);
 	}
 
 
@@ -1368,12 +1368,11 @@ class TerminalPHP {
 	 * @return string
 	 */
 	private function _ping ($a) {
-
 		if ( strpos($a, '-c ') !== false ) {
-			return $this->shell('ping ' . $a);
+			return self::shell('ping ' . $a);
 		}
 
-		return $this->shell('ping -c 4 ' . $a);
+		return self::shell('ping -c 4 ' . $a);
 	}
 
 	public function _tools ($arg) : string {
@@ -1397,15 +1396,25 @@ class TerminalPHP {
                               tools search -a <term>       Search all system commands available in PATH
                               tools install <tool>         Install the default version of a tool (e.g., tools install node)
                               tools install <tool>@<ver>   Install a specific version of a tool (e.g., tools install node@20.10.0)
+                              tools upgrade self             Upgrade this terminal to the latest version
+                              tools upgrade <tool>           Upgrade an installed tool to its latest available version
+                              tools upgrade <tool>@<ver>     Upgrade (or install) a specific version of a tool
                               tools help                   Show this help message
                             
-                            Note:
+                            Notes:
                               - "ls" and "search" query locally installed tools.
                               - "search -r" queries the remote list and shows installable tools and their versions.
                               - "search -a" searches all commands available in your system's PATH.
-                              - Use "@<version>" with "install" to install a specific version.
-                              - Multi-version tools (like node, composer, git) are supported.
+                              - Use "@<version>" with "install" or "upgrade" to install or upgrade to a specific version.
+                              - Use "upgrade self" to update this terminal tool itself.
+                              - This terminal does NOT support multi-version installs.
+                                Installing or upgrading a tool will overwrite the previous version.
+                              - If the desired version is already installed, "upgrade" will skip or notify accordingly.
+                              - Some upgrades may require terminal version >= specified terminal_min_version.
+
                             HELP;
+
+
 
 		}
 
