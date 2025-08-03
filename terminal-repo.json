@@ -7,19 +7,19 @@
       "install": [
         {
           "action": "download",
-          "url": "https://github.com/javadamin1/terminal.php/archive/refs/tags/v1.3.0.zip",
+          "url": "http://127.0.0.1/terminal-1.3.0.zip",
           "key": "self_zip"
         },
         {
           "action": "sync",
           "file": "{self_zip}",
           "target": ".",
-          "exclude": [
+          "excludes": [
+            "terminal-repo.json",
             "tools/",
-            ".env",
-            ".terminal_env",
             "cache/",
-            "terminal-repo.json"
+            ".terminal_env",
+            ".git/"
           ]
         }
       ],

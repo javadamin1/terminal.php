@@ -125,7 +125,7 @@ class CustomCommands {
                         <a href="mailto:hi@smartwf.ir" target="_blank">mail (original)</a> &nbsp; &nbsp;
                         <a href="http://twitter.com/smartwf" target="_blank">twitter (original)</a>
                         <br><br>
-                        Forked and maintained by <strong>Javad Fathi</strong><br>
+                        Forked and maintained by <strong style="color: #FFD700">Javad Fathi</strong><br>
                         <a href="https://github.com/javadamin1" target="_blank">github</a> &nbsp; &nbsp;
                         <a href="mailto:javadamin93@gmail.com" target="_blank">mail</a>
                         <a href="https:linkedin.com/in/javadfathi" target="_blank">Linkedin</a>
@@ -1074,7 +1074,7 @@ class TerminalPHP {
 			}
 
 			$bin = $this->config['tools']['binPath'];
-            Helper::mkdir($bin);
+			Helper::mkdir($bin);
 
 			$filename = basename($src);
 			$dest     = Helper::fixDir($bin) . $filename;
@@ -1126,7 +1126,8 @@ class TerminalPHP {
 	 * @return string
 	 * @throws \RuntimeException|\ToolInstallException
 	 */
-	public function extract ($file, $dest, string $key = '', array $exclude = []) : string {
+	public function extract ($file, $dest, string $key = '', array $exclude = [], $include = []) : string {
+
 
 		if ( !$file || !file_exists($file) ) {
 			throw new  ToolInstallException("❌ Extract error: File not found or not specified: " . htmlspecialchars($file));
@@ -1141,10 +1142,20 @@ class TerminalPHP {
 			}
 
 			if ( !class_exists('ZipArchive') ) {
-				$cmd  = sprintf('unzip -q %s -d %s', escapeshellarg($file), escapeshellarg($dest));
+				$cmd = sprintf('unzip -q %s -d %s', escapeshellarg($file), escapeshellarg($dest));
+
+				if ( !empty($include) ) {
+					$included = implode(' ', array_map('escapeshellarg', $include));
+					$cmd      = sprintf('unzip -q %s %s -d %s', escapeshellarg($file), $included, escapeshellarg($dest));
+				} elseif ( !empty($exclude) ) {
+
+					$excluded = implode(' ', array_map('escapeshellarg', $exclude));
+					$cmd      = sprintf('unzip -q %s -x %s -d %s', escapeshellarg($file), $excluded, escapeshellarg($dest));
+				}
+
 				$resp = $this->shell($cmd);
-				if ( !$resp ) {
-					throw new ToolInstallException("❌ Extract error: PHP ZipArchive not available and failed to extract zip using shell command.");
+				if ( $resp ) {
+					throw new ToolInstallException("❌ Extract error: PHP ZipArchive not available and failed to extract zip using shell command. Error: " . $resp);
 				}
 
 				return '✅ Extracted successfully to: ' . $resp;
@@ -1196,17 +1207,18 @@ class TerminalPHP {
 	/**
 	 * @throws \ToolInstallException
 	 */
-	public function syncZip ($zipPath, $targetDir, $key = '', $excludes = []) : void {
+	public function syncZip ($zipPath, $targetDir, $key = '', $excludes = []) : string {
 		$tmp = sys_get_temp_dir() . '/terminal_upgrade_' . uniqid('', true);
 		Helper::mkdir($tmp);
-		$key  = $key ?: 'syncExtract';
-		$html = $this->extract($zipPath, $targetDir, $key, $excludes);
+		$key = $key ?: 'syncExtract';
 
+		$html     = $this->extract($zipPath, $tmp, $key);
 
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tmp, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
-		Helper::dd($html, $tmp, $iterator);
+
 		foreach ( $iterator as $item ) {
-			$relPath  = substr($item->getPathname(), strlen($tmp) + 1);
+			$relPath = substr($item->getPathname(), strlen($tmp) + 1);
+
 			$destPath = $targetDir . '/' . $relPath;
 
 			$isExcluded = false;
@@ -1222,14 +1234,13 @@ class TerminalPHP {
 
 			if ( $item->isDir() ) {
 				if ( !is_dir($destPath) ) {
-					mkdir($destPath, 0755, true);
+					Helper::mkdir($destPath);
 				}
 			} else {
 				copy($item->getPathname(), $destPath);
 			}
 		}
 
-		// حذف فایل‌های قدیمی که در نسخه جدید نیستند
 		$existingFiles = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($targetDir, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
 
 		foreach ( $existingFiles as $item ) {
@@ -1256,9 +1267,10 @@ class TerminalPHP {
 			}
 		}
 
-		// پاکسازی
 		@unlink($zipPath);
-		shell_exec('rm -rf ' . escapeshellarg($tmp));
+		$this->shell('rm -rf ' . escapeshellarg($tmp));
+
+		return $html."</br> ✏️ Successfully to sync";
 	}
 
 
@@ -1303,9 +1315,10 @@ class TerminalPHP {
 		}
 
 		if ( $args === 'self' ) {
-            if (empty($threeWord) || $threeWord !== '-y') {
-	            return "⚠️ Upgrading 'self' will sync the terminal directory, remove unused files, and add new files. If you have custom files, the upgrade may overwrite them. Cancel the upgrade or confirm by adding '-y'. ⚠️";
-            }
+			if ( empty($threeWord) || $threeWord !== '-y' ) {
+				return "⚠️ Upgrading 'self' will sync the terminal directory, remove unused files, and add new files. If you have custom files, the upgrade may overwrite them. Cancel the upgrade or confirm by adding '-y'. ⚠️";
+			}
+
 			return $this->installTool('self');
 		}
 
@@ -1515,7 +1528,7 @@ $terminal = new TerminalPHP('', $config ?? []);
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
-    <link rel="icon" type="image/x-icon" href="./favicon.png">
+    <link rel="icon" type="image/x-icon" href="./assets/favicon.png">
     <meta charset="utf-8">
     <title>Terminal.php</title>
 
