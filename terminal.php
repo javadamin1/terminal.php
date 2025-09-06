@@ -12,7 +12,7 @@ if ( session_status() === PHP_SESSION_NONE ) {
  */
 
 /* Choose a random key Like ('YourRandomSecureKey') for Security */
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const KEY     = 'YourRandomSecureKey';
 
 if ( KEY !== '' ) {
@@ -82,6 +82,7 @@ $config = [
 		'repoPath'     => __DIR__ . '/terminal-repo.json',
 		'downloadPath' => __DIR__ . '/tools/download',
 		'binPath'      => __DIR__ . '/tools/bin',
+		'path'         => [__DIR__ . '/tools/bin', __DIR__ . '/tools/home/.composer/vendor/bin'],
 	],
 	'blockedCommands' => [/*'mkdir',
         'rm',
@@ -114,9 +115,9 @@ class CustomCommands {
 		$input = implode(' ', $a);
 		if ( $input ) {
 			return md5($input);
-		} else {
-			return 'write something, example:<br>md5 test';
 		}
+
+		return 'write something, example:<br>md5 test';
 	}
 
 	public static function developer () : string {
@@ -380,7 +381,7 @@ class Cache {
 	 */
 	private function ensureCommandsCacheFile (string $filePath) : string {
 		$dirPath = dirname($filePath);
-        Helper::mkdir($dirPath);
+		Helper::mkdir($dirPath);
 		if ( !file_exists($filePath) ) {
 			file_put_contents($filePath, json_encode([], JSON_PRETTY_PRINT));
 		}
@@ -416,6 +417,8 @@ class Cache {
 
 			return $key ? ($data[$key] ?? null) : $data;
 		}
+
+		return null;
 	}
 
 	private function setData ($key, $value) {
@@ -435,6 +438,8 @@ class Cache {
 
 			return $fileCreated;
 		}
+
+		return false;
 	}
 
 	/**
@@ -534,9 +539,9 @@ class Cache {
 					$this->deleteData($key);
 
 					return true;
-				} else {
-					$data = $value;
 				}
+
+				$data = $value;
 			} else {
 				$data = self::setValueInArray($data, $pathList, $value);
 			}
@@ -620,7 +625,7 @@ class TerminalPHP {
 		if ( isset($this->config['checkUpdate']) && $this->config['checkUpdate'] !== 'none' ) {
 			$day                = 3600 * 24;
 			$waitForCheckUpdate = $day;
-			if ( $this->config['checkUpdate'] == 'week' ) {
+			if ( $this->config['checkUpdate'] === 'week' ) {
 				$waitForCheckUpdate = $day * 7;
 			} else if ( $this->config['checkUpdate'] == 'month' ) {
 				$waitForCheckUpdate = $day * 30;
@@ -694,9 +699,21 @@ class TerminalPHP {
 
 	private function putEnv () : void {
 		$originalPath = getenv('PATH');
-		$binPath      = $this->config['tools']['binPath'] ?? '';
+		$binPath      = $this->config['tools']['path'] ?? [];
 		if ( !empty($binPath) ) {
-			putenv('PATH=' . $binPath . ':' . $originalPath);
+			$newPath = '';
+			if ( is_array($binPath) ) {
+
+				foreach ( $binPath as $binPathItem ) {
+					if ( is_dir($binPathItem) ) {
+						$newPath .= ':' . $binPathItem;
+					}
+
+				}
+			} elseif ( is_string($binPath) ) {
+				$newPath = $binPath;
+			}
+			putenv('PATH=' . $newPath . ':' . $originalPath);
 		}
 
 		$envPath = $this->config['envFile'] ?? '';
@@ -753,7 +770,7 @@ class TerminalPHP {
 		// create local commend name
 		$localCmd = '_' . $cmd;
 		if ( method_exists($this, $localCmd) ) {
-			return $this->$localCmd($arg);
+			return $this->$localCmd($arg) ?? '';
 		}
 		if ( $this->isCommandBlocked($cmd) ) {
 			return 'terminal.php: Permission denied';
@@ -838,9 +855,9 @@ class TerminalPHP {
 			$day             = 3600 * 24;
 			$expireAt        = $day;
 			$readFromCache   = false;
-			if ( $toolsCache == 'week' ) {
+			if ( $toolsCache === 'week' ) {
 				$expireAt = $day * 7;
-			} else if ( $toolsCache == 'month' ) {
+			} else if ( $toolsCache === 'month' ) {
 				$expireAt = $day * 30;
 			}
 			if ( !empty($lastCheckTime) && $now < ($lastCheckTime + $expireAt) ) {
@@ -1228,6 +1245,9 @@ class TerminalPHP {
 			throw new ToolInstallException("❌ Extract error: Unsupported file type: " . htmlspecialchars($ext));
 		}
 
+		if ( !file_exists($dest) ) {
+			throw new ToolInstallException("❌ Extract error: Cannot find : $dest");
+		}
 		if ( $key ) {
 			$this->installContext[$key] = $dest;
 		}
@@ -1346,11 +1366,10 @@ class TerminalPHP {
 	 *
 	 * @return void
 	 */
-	private function _cd ($path) {
+	private function _cd (string $path) : void {
 		if ( $path ) {
 			chdir($path);
 		}
-
 	}
 
 	/**
@@ -1413,9 +1432,6 @@ class TerminalPHP {
                               - Some upgrades may require terminal version >= specified terminal_min_version.
 
                             HELP;
-
-
-
 		}
 
 		if ( in_array($cmd, ['ls', 'list', 'la']) ) {
@@ -1453,7 +1469,7 @@ class TerminalPHP {
 					}
 				}
 				if ( empty($exist) ) {
-					return '😩 Package "' . $threeWord . '" not found';;
+					return '😩 Package "' . $threeWord . '" not found';
 				}
 				$resp = '';
 				foreach ( $exist as $value ) {
@@ -1553,7 +1569,7 @@ $terminal = new TerminalPHP('', $config ?? []);
     <style>
         :root {
             --background-url: url('http://files.javadfathi.ir/terminal-background.jpeg');
-            --font: Vazirmatn, sans-serif;
+            --font: Vazirmatn;
             --font-size: 14px;
             --primary-color: #101010;
             --color-scheme-1: #55c2f9;
@@ -1580,7 +1596,7 @@ $terminal = new TerminalPHP('', $config ?? []);
         }
 
         * {
-            font-family: var(--font);
+            font-family: var(--font), sans-serif;
         }
 
         body {
@@ -1886,9 +1902,9 @@ $terminal = new TerminalPHP('', $config ?? []);
 </div>
 
 
-<footer>Coded by <a href="https://github.com/smartwf">SmartWF</a>And modified BY<a href="https://github.com/javadamin1">javad
+<footer>Coded by <a href="https://github.com/smartwf">SmartWF</a> And modified
+    BY<a href="https://github.com/javadamin1"> javad
         fathi</a></footer>
-
 <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
 <script type="text/javascript">
     let commands_list = <?php print_r(json_encode($terminal->commandsList())); ?>;
@@ -1910,7 +1926,7 @@ $terminal = new TerminalPHP('', $config ?? []);
 <script type="text/javascript">
     var path                        = '<?= $terminal->pwd()?>';
     var command                     = '';
-    var command_history             = [];
+    var command_history             = JSON.parse(localStorage.getItem('terminal_history') || '[]');
     var history_index               = 0;
     var suggest                     = false;
     var blink_position              = 0;
@@ -2087,6 +2103,7 @@ $terminal = new TerminalPHP('', $config ?? []);
     function addToHistory(command) {
         if (command.length >= 2 && (command_history.length === 0 || command_history[command_history.length - 1] !== command))
             command_history[command_history.length] = command;
+        localStorage.setItem('terminal_history', JSON.stringify(command_history));
     }
 
     function normalizeHtml() {
@@ -2238,14 +2255,16 @@ $terminal = new TerminalPHP('', $config ?? []);
         var res        = [];
         let start_from = arg.length ? Number.isInteger(Number(arg[0])) ? Number(arg[0]) : 0 : 0;
 
-        if (start_from != 0 && start_from <= command_history.length)
+        if (start_from != 0 && start_from <= command_history.length) {
             for (var i = command_history.length - start_from; i < command_history.length; i++) {
                 res[res.length] = (i + 1) + ' &nbsp;' + command_history[i];
             }
-        else
+        } else {
             command_history.forEach(function (item, index) {
                 res[res.length] = (index + 1) + ' &nbsp;' + item;
             });
+        }
+
 
         $('terminal .content').append('<line>' + res.join('<br>') + '</line>');
     }

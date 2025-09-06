@@ -1,38 +1,38 @@
-# Terminal.php - Web-based Terminal Emulator for PHP
+# Terminal.php – Web-based Terminal Emulator for PHP
 
 A lightweight and customizable PHP-based terminal emulator that lets you run shell commands from your browser.  
 🛠 Forked and extended from [SmartWF's terminal.php](https://github.com/smartwf/terminal.php) with improvements in customization and security.
-
 ---
-
-## 📸 Screenshot
-
-![Terminal UI Screenshot](assets/screenshot.png)
+## Demo
+![Terminal Help Command](assets/help.gif)
 
 ---
 
 ## 🚀 Features
 
 - Execute server-side shell commands via web UI
-- Define custom PHP-based commands
-- Prevent execution of dangerous commands
-- Ajax-based command execution for better UX
-- Compatible with Laravel (CSRF/auth supported)
-- Clean HTML output formatting
+- Define custom PHP commands
+- Block execution of dangerous commands
+- Ajax-based  execution for smoother UX
+- Laravel compatible (CSRF/auth supported)
 - Tools discovery & caching (with filtering/search)
-- 🔧 Install developer tools like `composer`, `node` via `tools install`
+- Install developer tools like composer, node with "tools install"
 
 ---
 
 ## 📦 Tools Installer
 
-> ⚙️ You can also upgrade the terminal or installed tools using the `tools upgrade` command. Type `tools help` for more info.
-
-
-### ▶️ Example Usage
+> ⚙️ Upgrade the terminal or installed tools using:
 
 ```bash
-tools install composer
+  tools upgrade
+  tools help
+```
+
+### ▶️ Example:
+
+```bash
+  tools install composer
 ```
 
 This will:
@@ -77,23 +77,12 @@ Here’s a sample `composer` install script as used internally:
   }
 }
 ```
-
 ---
-
-You can also create your own custom repository and add tools like `nvm`, `php-cs-fixer`, `wp-cli`, etc.
-
-```bash
-tools install nvm
-tools install wp-cli
-```
-
 The terminal will parse the JSON, execute installation steps safely, and make tools globally usable inside your web terminal.
 
 ### 🌐 Future Support: Remote Tool Repository
 
 In future releases, tools will be fetched dynamically from an online repository like:
-
-
 ---
 
 ## 🔐 Security Setup
