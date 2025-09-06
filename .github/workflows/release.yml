@@ -1,0 +1,47 @@
+name: Create Release from Tag
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get tag name
+        id: tag
+        run: echo "TAG_NAME=${GITHUB_REF##*/}" >> $GITHUB_ENV
+
+      - name: Create zip with project files
+        run: |
+          mkdir terminal-temp
+          rsync -av --exclude='.git' --exclude='.github' ./ terminal-temp/
+          cd terminal-temp
+          zip -r ../terminal-${TAG_NAME}.zip ./*
+        shell: bash
+
+      - name: Read CHANGELOG section
+        id: changelog
+        run: |
+          TAG_NAME=${GITHUB_REF##*/}
+          VERSION=${TAG_NAME#v}
+          CONTENT=$(awk "/## \[${VERSION//./\\.}\]/ {flag=1; next} /^## \[/ {flag=0} flag" CHANGELOG.md)
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          echo "$CONTENT" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ env.TAG_NAME }}
+          tag_name: ${{ env.TAG_NAME }}
+          body: ${{ env.CHANGELOG }}
+          files: terminal-${{ env.TAG_NAME }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
